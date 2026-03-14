@@ -1,0 +1,302 @@
+import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useState } from "react";
+import {
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { useEffect } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LiveTimerHeader } from "@/components/LiveTimerHeader";
+
+const COLORS = {
+  bg: "#070812",
+  neon: "#00D8FF",
+  neonGlow: "rgba(0,216,255,0.7)",
+  white: "#FFFFFF",
+  textSecondary: "#B7BDD6",
+  textMuted: "#6E7594",
+  inputBg: "#10131A",
+};
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const SQUARE_SIZE = SCREEN_WIDTH * 0.84;
+const MAX_CHARS = 20;
+
+// Shared pill dimensions
+const PILL_WIDTH = SCREEN_WIDTH * 0.77;
+const PILL_HEIGHT = 56;
+const PILL_RADIUS = 28;
+
+export default function PreviewScreen() {
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{
+    uri?: string;
+    startAt?: string;
+    remainingMs?: string;
+    isDemo?: string;
+  }>();
+
+  const uri = params.uri ?? "";
+  const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000;
+  const startAt = params.startAt ?? new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
+  const isDemo = params.isDemo === "true";
+
+  const [caption, setCaption] = useState("");
+
+  // Breathing glow for CHECK IN button
+  const glowOpacity = useSharedValue(0.35);
+  const pressGlow = useSharedValue(0);
+
+  useEffect(() => {
+    glowOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.5, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.25, { duration: 1800, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      false
+    );
+  }, []);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: glowOpacity.value + pressGlow.value,
+  }));
+
+  function handlePressIn() {
+    pressGlow.value = withTiming(0.5, { duration: 80 });
+  }
+  function handlePressOut() {
+    pressGlow.value = withTiming(0, { duration: 300 });
+  }
+
+  function handleRetake() {
+    router.back();
+  }
+
+  function handlePost() {
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    router.push({
+      pathname: "/check-in/posting" as any,
+      params: { startAt, remainingMs: String(remainingMs), isDemo: isDemo ? "true" : "false" },
+    });
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={[styles.screen, { paddingTop: insets.top }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
+      {/* LIVE Timer */}
+      <LiveTimerHeader remainingMs={remainingMs} />
+
+      <View style={styles.body}>
+        {/* Square image preview with neon border */}
+        <View style={styles.imageGlowWrapper}>
+          <View style={styles.imageWrapper}>
+            {uri ? (
+              <Image
+                source={{ uri }}
+                style={styles.image}
+                contentFit="cover"
+              />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Text style={styles.placeholderText}>📷</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Text input — dark layered background */}
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={styles.input}
+            placeholder="コメントを入力..."
+            placeholderTextColor={COLORS.textMuted}
+            value={caption}
+            onChangeText={(t) => setCaption(t.slice(0, MAX_CHARS))}
+            maxLength={MAX_CHARS}
+            returnKeyType="done"
+            multiline={false}
+          />
+          <Text style={styles.charCount}>
+            {caption.length}/{MAX_CHARS}
+          </Text>
+        </View>
+
+        {/* CHECK IN button — outline pill */}
+        <View style={styles.checkInContainer}>
+          <Animated.View style={[styles.checkInGlow, glowStyle]} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.checkInPill,
+              pressed && styles.checkInPillPressed,
+            ]}
+            onPress={handlePost}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          >
+            <Text style={styles.checkInLabel}>CHECK IN</Text>
+          </Pressable>
+        </View>
+
+        {/* RETAKE — small outline button below */}
+        <Pressable
+          style={({ pressed }) => [styles.retakeButton, pressed && { opacity: 0.5 }]}
+          onPress={handleRetake}
+        >
+          <Text style={styles.retakeText}>RETAKE</Text>
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  body: {
+    flex: 1,
+    alignItems: "center",
+    paddingTop: 8,
+    gap: 14,
+    paddingBottom: 16,
+  },
+  // Image with neon border
+  imageGlowWrapper: {
+    // Outer glow
+    shadowColor: COLORS.neon,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    borderRadius: 12,
+  },
+  imageWrapper: {
+    width: SQUARE_SIZE,
+    height: SQUARE_SIZE,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#111",
+    borderWidth: 1,
+    borderColor: "rgba(0,216,255,0.4)",
+  },
+  image: {
+    width: SQUARE_SIZE,
+    height: SQUARE_SIZE,
+  },
+  imagePlaceholder: {
+    width: SQUARE_SIZE,
+    height: SQUARE_SIZE,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0E1020",
+  },
+  placeholderText: {
+    fontSize: 64,
+  },
+  // Input — dark layered background
+  inputWrapper: {
+    width: SQUARE_SIZE,
+    backgroundColor: COLORS.inputBg,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  input: {
+    flex: 1,
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "400",
+    lineHeight: 24,
+  },
+  charCount: {
+    color: COLORS.textMuted,
+    fontSize: 12,
+    fontWeight: "400",
+    marginLeft: 8,
+    opacity: 0.6,
+  },
+  // CHECK IN outline pill
+  checkInContainer: {
+    width: PILL_WIDTH,
+    height: PILL_HEIGHT,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  checkInGlow: {
+    position: "absolute",
+    width: PILL_WIDTH + 24,
+    height: PILL_HEIGHT + 24,
+    borderRadius: PILL_RADIUS + 12,
+    backgroundColor: "transparent",
+    shadowColor: COLORS.neon,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 0,
+  },
+  checkInPill: {
+    width: PILL_WIDTH,
+    height: PILL_HEIGHT,
+    borderRadius: PILL_RADIUS,
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: COLORS.neon,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  checkInPillPressed: {
+    backgroundColor: "rgba(0,216,255,0.08)",
+  },
+  checkInLabel: {
+    color: COLORS.neon,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+  },
+  // RETAKE — small outline button
+  retakeButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  retakeText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: "500",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+});
