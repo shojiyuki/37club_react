@@ -61,5 +61,4 @@ Thumbs.db
 *.tar.gz
 .cache/
 
-# Webdev artifacts (checkpoint zips, migrations, etc.)
-.webdev/
+.codex
