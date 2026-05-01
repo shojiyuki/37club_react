@@ -1,14 +1,16 @@
 /**
- * Custom environment loader that prioritizes system environment variables
- * over .env file values. This ensures that Manus platform-injected variables
- * are not overridden by placeholder values in .env
+ * Custom environment loader.
+ *
+ * Expo may preload .env.local / .env.development before app.config.ts runs.
+ * In this project, scripts/sync-env.js copies the selected file to .env first,
+ * so .env is the source of truth for app.config.ts.
  */
 const fs = require("fs");
 const path = require("path");
 
-const envPath = path.resolve(process.cwd(), ".env");
+function loadEnvFile(envPath) {
+  if (!fs.existsSync(envPath)) return;
 
-if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, "utf8");
   const lines = envContent.split("\n");
 
@@ -21,13 +23,12 @@ if (fs.existsSync(envPath)) {
       const key = match[1].trim();
       const value = match[2].trim().replace(/^["']|["']$/g, ""); // Remove quotes
 
-      // Only set if not already defined in environment
-      if (!process.env[key]) {
-        process.env[key] = value;
-      }
+      process.env[key] = value;
     }
   });
 }
+
+loadEnvFile(path.resolve(process.cwd(), ".env"));
 
 // Map system variables to Expo public variables
 const mappings = {

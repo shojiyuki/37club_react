@@ -5,6 +5,9 @@
   "main": "expo-router/entry",
   "scripts": {
     "dev": "concurrently -k \"pnpm dev:server\" \"pnpm dev:metro\"",
+    "dev:local": "node scripts/sync-env.js local && pnpm dev",
+    "dev:development": "node scripts/sync-env.js development && pnpm dev",
+    "dev:production": "node scripts/sync-env.js production && pnpm dev",
     "dev:server": "cross-env NODE_ENV=development tsx watch server/_core/index.ts",
     "dev:metro": "cross-env EXPO_USE_METRO_WORKSPACE_ROOT=1 npx expo start --web --port ${EXPO_PORT:-8081}",
     "build": "esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",

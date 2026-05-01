@@ -26,6 +26,28 @@ const bundleId =
 const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
 const schemeFromBundleId = `manus${timestamp}`;
 
+type AppEnv = "local" | "development" | "production";
+type DataSource = "mock" | "api";
+
+function resolveAppEnv(value: string | undefined): AppEnv {
+  if (value === "development" || value === "production") {
+    return value;
+  }
+  return "local";
+}
+
+const appEnv = resolveAppEnv(process.env.APP_ENV);
+const apiBaseUrlByEnv: Record<AppEnv, string> = {
+  local: process.env.API_BASE_URL_LOCAL ?? process.env.API_BASE_URL ?? "http://localhost:3000",
+  development: process.env.API_BASE_URL_DEVELOPMENT ?? process.env.API_BASE_URL ?? "http://localhost:3000",
+  production: process.env.API_BASE_URL_PRODUCTION ?? process.env.API_BASE_URL ?? "https://api.example.com",
+};
+const dataSourceByEnv: Record<AppEnv, DataSource> = {
+  local: (process.env.DATA_SOURCE_LOCAL as DataSource | undefined) ?? (process.env.DATA_SOURCE as DataSource | undefined) ?? "mock",
+  development: (process.env.DATA_SOURCE_DEVELOPMENT as DataSource | undefined) ?? (process.env.DATA_SOURCE as DataSource | undefined) ?? "api",
+  production: (process.env.DATA_SOURCE_PRODUCTION as DataSource | undefined) ?? (process.env.DATA_SOURCE as DataSource | undefined) ?? "api",
+};
+
 const env = {
   // App branding - update these values directly (do not use env vars)
   appName: "37Club",
@@ -36,6 +58,14 @@ const env = {
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
+  appEnv,
+  dataSource: dataSourceByEnv[appEnv] === "api" ? "api" : "mock",
+  apiBaseUrl: apiBaseUrlByEnv[appEnv],
+  oauthPortalUrl: process.env.EXPO_PUBLIC_OAUTH_PORTAL_URL ?? process.env.VITE_OAUTH_PORTAL_URL ?? "",
+  oauthServerUrl: process.env.EXPO_PUBLIC_OAUTH_SERVER_URL ?? process.env.OAUTH_SERVER_URL ?? "",
+  appId: process.env.EXPO_PUBLIC_APP_ID ?? process.env.VITE_APP_ID ?? "",
+  ownerOpenId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? process.env.OWNER_OPEN_ID ?? "",
+  ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? process.env.OWNER_NAME ?? "",
 };
 
 const config: ExpoConfig = {
@@ -132,6 +162,16 @@ const config: ExpoConfig = {
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
+  },
+  extra: {
+    appEnv: env.appEnv,
+    dataSource: env.dataSource,
+    apiBaseUrl: env.apiBaseUrl,
+    oauthPortalUrl: env.oauthPortalUrl,
+    oauthServerUrl: env.oauthServerUrl,
+    appId: env.appId,
+    ownerOpenId: env.ownerOpenId,
+    ownerName: env.ownerName,
   },
 };
 
