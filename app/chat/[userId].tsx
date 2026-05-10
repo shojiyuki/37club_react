@@ -1,6 +1,6 @@
 // Dynamic chat route: /chat/[userId]
-// Mirrors the functionality of /chat/index.tsx but uses a dynamic segment
-// so that router.push({ pathname: "/chat/[userId]", params: { userId } }) works correctly.
+// Primary chat detail route; /chat/index.tsx was removed to avoid a duplicate
+// user-less chat detail screen.
 
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
