@@ -1,17 +1,11 @@
 import React from "react";
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
+import { useChatList } from "@/hooks/use-chat-list";
 import { useAppMode } from "@/lib/app-mode-context";
-import { MOCK_USERS, MOCK_CHAT_BY_USER, MOCK_POSTS } from "@/lib/mock-data";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -28,27 +22,13 @@ const COLORS = {
 };
 
 const LIVE_REMAINING_MS = 4 * 60 * 1000 + 52 * 1000;
-const MOCK_START_AT = new Date(Date.now() - (37 * 60 * 1000 - LIVE_REMAINING_MS)).toISOString();
-const ME = "me";
+const MOCK_START_AT = new Date(
+  Date.now() - (37 * 60 * 1000 - LIVE_REMAINING_MS),
+).toISOString();
 
 // Thumbnail size
 const THUMB_SIZE = 52;
 const THUMB_RADIUS = 12;
-
-// Mutual-follow users only can chat
-const CHAT_USERS = MOCK_USERS.filter((u) => u.followState === "mutual");
-
-// Simulate unread: first user has unread messages
-const UNREAD_USER_IDS = new Set(["u1"]);
-
-// Build a map: userId → their latest post imageUri
-const USER_POST_IMAGE: Record<string, string> = {};
-for (const post of MOCK_POSTS) {
-  // Keep the first post found per user (MOCK_POSTS is ordered by recency)
-  if (!USER_POST_IMAGE[post.user.id]) {
-    USER_POST_IMAGE[post.user.id] = post.imageUri;
-  }
-}
 
 // ─── Thumbnail ───────────────────────────────────────────────────────────────
 
@@ -64,12 +44,7 @@ function PostThumbnail({
   const initial = userName[0]?.toUpperCase() ?? "?";
 
   return (
-    <View
-      style={[
-        styles.thumbWrapper,
-        hasUnread && styles.thumbWrapperUnread,
-      ]}
-    >
+    <View style={[styles.thumbWrapper, hasUnread && styles.thumbWrapperUnread]}>
       {imageUri ? (
         <Image
           source={{ uri: imageUri }}
@@ -79,7 +54,9 @@ function PostThumbnail({
       ) : (
         // Fallback: rounded-rect placeholder with initial
         <View style={styles.thumbPlaceholder}>
-          <Text style={[styles.thumbInitial, hasUnread && { color: COLORS.neon }]}>
+          <Text
+            style={[styles.thumbInitial, hasUnread && { color: COLORS.neon }]}
+          >
             {initial}
           </Text>
         </View>
@@ -111,15 +88,16 @@ function ChatRow({
       onPress={onPress}
     >
       {/* Post thumbnail (rounded rect, not circle) */}
-      <PostThumbnail imageUri={imageUri} userName={userName} hasUnread={hasUnread} />
+      <PostThumbnail
+        imageUri={imageUri}
+        userName={userName}
+        hasUnread={hasUnread}
+      />
 
       {/* Text block */}
       <View style={styles.textBlock}>
         <Text
-          style={[
-            styles.userName,
-            hasUnread && { color: COLORS.neon },
-          ]}
+          style={[styles.userName, hasUnread && { color: COLORS.neon }]}
           numberOfLines={1}
         >
           @{userName}
@@ -140,6 +118,7 @@ function ChatRow({
 export default function ChatListScreen() {
   const insets = useSafeAreaInsets();
   const { isDemo, demoPostedAt } = useAppMode();
+  const { chatUsers } = useChatList();
 
   function handleUserPress(userId: string, userName: string) {
     router.push({
@@ -163,33 +142,23 @@ export default function ChatListScreen() {
         <Text style={styles.headerTitle}>CHAT</Text>
       </View>
 
-      {CHAT_USERS.length === 0 ? (
+      {chatUsers.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>相互フォローのユーザーがいません</Text>
         </View>
       ) : (
         <FlatList
-          data={CHAT_USERS}
+          data={chatUsers}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
-            const history = MOCK_CHAT_BY_USER[item.id] ?? [];
-            const last = history[history.length - 1];
-            const lastMsg = last
-              ? last.senderId === ME
-                ? `あなた: ${last.text}`
-                : last.text
-              : "";
-            const hasUnread = UNREAD_USER_IDS.has(item.id);
-            const imageUri = USER_POST_IMAGE[item.id];
-
             return (
               <ChatRow
                 userId={item.id}
                 userName={item.name}
-                imageUri={imageUri}
-                lastMessage={lastMsg}
-                hasUnread={hasUnread}
+                imageUri={item.imageUri}
+                lastMessage={item.lastMessage}
+                hasUnread={item.hasUnread}
                 onPress={() => handleUserPress(item.id, item.name)}
               />
             );

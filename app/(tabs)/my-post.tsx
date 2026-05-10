@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useMyPost } from "@/hooks/use-my-post";
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -37,19 +38,11 @@ const C = {
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const IMAGE_SIZE = SCREEN_WIDTH - 48; // full-width minus padding
 
-// ─── Mock post data ───────────────────────────────────────────────────────────
-
-const MY_POST = {
-  imageUri: null as string | null, // null = placeholder
-  caption: "赤いバラを持ってきた",
-  postedAt: "06:32",
-  topicLabel: "渋谷駅 ハチ公前",
-};
-
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
 export default function MyDropScreen() {
   const insets = useSafeAreaInsets();
+  const { myPost } = useMyPost();
 
   function handleCheckOut() {
     Alert.alert(
@@ -76,7 +69,7 @@ export default function MyDropScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>MY DROP</Text>
-        <Text style={styles.headerSub}>{MY_POST.topicLabel}</Text>
+        <Text style={styles.headerSub}>{myPost.topicLabel}</Text>
       </View>
 
       <ScrollView
@@ -90,9 +83,9 @@ export default function MyDropScreen() {
         {/* Post preview card */}
         <View style={styles.card}>
           {/* Photo */}
-          {MY_POST.imageUri ? (
+          {myPost.imageUri ? (
             <Image
-              source={{ uri: MY_POST.imageUri }}
+              source={{ uri: myPost.imageUri }}
               style={styles.postImage}
               resizeMode="cover"
             />
@@ -105,9 +98,9 @@ export default function MyDropScreen() {
           {/* Caption + time */}
           <View style={styles.captionRow}>
             <Text style={styles.caption} numberOfLines={2}>
-              {MY_POST.caption}
+              {myPost.caption}
             </Text>
-            <Text style={styles.postedAt}>{MY_POST.postedAt}</Text>
+            <Text style={styles.postedAt}>{myPost.postedAt}</Text>
           </View>
         </View>
 

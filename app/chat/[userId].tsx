@@ -18,9 +18,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
+import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useAppMode } from "@/lib/app-mode-context";
 import {
-  MOCK_CHAT_BY_USER,
   MOCK_POSTS,
   MOCK_USERS,
   ChatMessage,
@@ -82,9 +82,7 @@ export default function ChatDetailScreen() {
     ? MOCK_POSTS.find((p) => p.id === postId)
     : MOCK_POSTS.find((p) => p.user.id === userId);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(
-    MOCK_CHAT_BY_USER[userId] ?? []
-  );
+  const { messages, sendMessage } = useChatMessages(userId);
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);
 
@@ -94,12 +92,7 @@ export default function ChatDetailScreen() {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    const newMsg: ChatMessage = {
-      id: `m${Date.now()}`,
-      senderId: ME,
-      text,
-    };
-    setMessages((prev) => [...prev, newMsg]);
+    sendMessage(text);
     setInputText("");
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });

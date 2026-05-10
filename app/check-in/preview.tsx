@@ -23,6 +23,7 @@ import Animated, {
 import { useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeader } from "@/components/LiveTimerHeader";
+import { useCreatePost } from "@/hooks/use-create-post";
 
 const COLORS = {
   bg: "#070812",
@@ -45,6 +46,7 @@ const PILL_RADIUS = 28;
 
 export default function PreviewScreen() {
   const insets = useSafeAreaInsets();
+  const { createPost, isLoading: isCreatingPost } = useCreatePost();
   const params = useLocalSearchParams<{
     uri?: string;
     startAt?: string;
@@ -89,10 +91,18 @@ export default function PreviewScreen() {
     router.back();
   }
 
-  function handlePost() {
+  async function handlePost() {
+    if (isCreatingPost) return;
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
+    await createPost({
+      imageUri: uri,
+      caption,
+      startAt,
+      remainingMs,
+      isDemo,
+    });
     router.push({
       pathname: "/check-in/posting" as any,
       params: { startAt, remainingMs: String(remainingMs), isDemo: isDemo ? "true" : "false" },
@@ -154,6 +164,7 @@ export default function PreviewScreen() {
             onPress={handlePost}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
+            disabled={isCreatingPost}
           >
             <Text style={styles.checkInLabel}>CHECK IN</Text>
           </Pressable>

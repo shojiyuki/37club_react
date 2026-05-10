@@ -30,11 +30,11 @@ import Animated, {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeader, LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
+import { useChatMessages } from "@/hooks/use-chat-messages";
+import { useFollow } from "@/hooks/use-follow";
+import { usePosts } from "@/hooks/use-posts";
 import { useAppMode } from "@/lib/app-mode-context";
 import {
-  FOLLOWING_POST_IDS,
-  MOCK_POSTS,
-  MOCK_CHAT_BY_USER,
   MockPost,
   ChatMessage,
   FollowState,
@@ -148,7 +148,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
   const isChatMode = useSharedValue(false);
   const [chatModeState, setChatModeState] = useState(false);
   const [inputText, setInputText] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const { messages, sendMessage, resetMessages } = useChatMessages(post?.user.id);
   const flatListRef = useRef<FlatList>(null);
 
   React.useEffect(() => {
@@ -156,14 +156,13 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
       isChatMode.value = false;
       setChatModeState(false);
       setInputText("");
-      const history = MOCK_CHAT_BY_USER[post.user.id] ?? [];
-      setMessages(history);
+      resetMessages();
       translateY.value = withTiming(0, { duration: 350, easing: Easing.out(Easing.cubic) });
       sheetHeight.value = withTiming(SHEET_70, { duration: 350, easing: Easing.out(Easing.cubic) });
     } else if (!visible) {
       translateY.value = withTiming(SHEET_70, { duration: 300 });
     }
-  }, [visible, post?.id]);
+  }, [visible, post?.id, resetMessages]);
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -225,8 +224,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
     const text = inputText.trim();
     if (!text) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const newMsg: ChatMessage = { id: `m${Date.now()}`, senderId: ME, text };
-    setMessages((prev) => [...prev, newMsg]);
+    sendMessage(text);
     setInputText("");
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }
@@ -564,14 +562,11 @@ function TabBar({
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
   const { isDemo, demoPostedAt } = useAppMode();
+  const { posts } = usePosts();
+  const { followingPosts, getFollowState, updateFollowState } = useFollow(posts);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [selectedPost, setSelectedPost] = useState<MockPost | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
-  const [followStates, setFollowStates] = useState<Record<string, FollowState>>(() => {
-    const init: Record<string, FollowState> = {};
-    MOCK_POSTS.forEach((p) => { init[p.user.id] = p.user.followState; });
-    return init;
-  });
 
   const tabScrollRef = useRef<ScrollView>(null);
   const [isReloading, setIsReloading] = useState(false);
@@ -606,14 +601,14 @@ export default function PostsScreen() {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const merged: MockPost = {
       ...post,
-      user: { ...post.user, followState: followStates[post.user.id] ?? post.user.followState },
+      user: { ...post.user, followState: getFollowState(post) },
     };
     setSelectedPost(merged);
     setSheetVisible(true);
   }
 
   function handleFollowChange(userId: string, next: FollowState) {
-    setFollowStates((prev) => ({ ...prev, [userId]: next }));
+    updateFollowState(userId, next);
     setSelectedPost((prev) =>
       prev && prev.user.id === userId
         ? { ...prev, user: { ...prev.user, followState: next } }
@@ -626,16 +621,16 @@ export default function PostsScreen() {
       <PostCell
         item={item}
         index={index}
-        followState={followStates[item.user.id] ?? item.user.followState}
+        followState={getFollowState(item)}
         onPress={() =>
           handlePostPress({
             ...item,
-            user: { ...item.user, followState: followStates[item.user.id] ?? item.user.followState },
+            user: { ...item.user, followState: getFollowState(item) },
           })
         }
       />
     ),
-    [followStates]
+    [getFollowState]
   );
 
   return (
@@ -671,7 +666,7 @@ export default function PostsScreen() {
       >
         <View style={{ width: SCREEN_WIDTH }}>
           <FlatList
-            data={MOCK_POSTS}
+            data={posts}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             numColumns={NUM_COLS}
@@ -683,7 +678,7 @@ export default function PostsScreen() {
         </View>
         <View style={{ width: SCREEN_WIDTH }}>
           <FlatList
-            data={MOCK_POSTS.filter((p) => FOLLOWING_POST_IDS.has(p.id))}
+            data={followingPosts}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
             numColumns={NUM_COLS}
