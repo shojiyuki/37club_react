@@ -176,6 +176,7 @@ function FlipButton({ onPress }: { onPress: () => void }) {
 
 export default function CameraScreen() {
   const insets = useSafeAreaInsets();
+  const { exitCommunity, mode } = useAppMode();
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<"back" | "front">("back");
   const [flash, setFlash] = useState<"off" | "on">("off");
@@ -255,8 +256,6 @@ export default function CameraScreen() {
     }
     setFlash((cur) => (cur === "off" ? "on" : "off"));
   }
-
-  const { exitCommunity, mode } = useAppMode();
 
   function handleCancel() {
     // In community mode: show CHECK OUT confirmation

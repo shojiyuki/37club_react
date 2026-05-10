@@ -16,13 +16,12 @@
  */
 
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useRef } from "react";
-import { Dimensions, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useRef } from "react";
+import { Dimensions, Platform, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withSequence,
   withTiming,
 } from "react-native-reanimated";
@@ -37,6 +36,8 @@ const VIDEO_HEIGHT = VIDEO_WIDTH;
 
 const NEON = "#00D8FF";
 const COLORS = { bg: "#000000" };
+const VIDEO_SOURCE = require("@/assets/images/logo.mov");
+const VIDEO_FALLBACK_MS = 3500;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,9 @@ export default function PostedScreen() {
   const params = useLocalSearchParams<{ isDemo?: string; startAt?: string; remainingMs?: string }>();
   const isDemo = params.isDemo === "true";
   const navigated = useRef(false);
+  const sequenceStarted = useRef(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Animated values ──────────────────────────────────────────────────────
   // WELCOME: opacity + translateY + scale
@@ -63,18 +67,10 @@ export default function PostedScreen() {
     router.replace("/(tabs)/posts" as any);
   }, [enterCommunity, isDemo]);
 
-  // ── Video player ─────────────────────────────────────────────────────────
-  const player = useVideoPlayer(
-    require("@/assets/images/logo.mov"),
-    (p) => {
-      p.loop = false;
-      p.muted = true;
-      p.play();
-    }
-  );
+  const startWelcomeSequence = useCallback(() => {
+    if (sequenceStarted.current) return;
+    sequenceStarted.current = true;
 
-  // playToEnd → trigger WELCOME animation sequence → auto navigate
-  useEventListener(player, "playToEnd", () => {
     // 1) Slide up + fade in WELCOME (0.6s easeOut)
     welcomeTranslateY.value = withTiming(0, {
       duration: 600,
@@ -98,19 +94,53 @@ export default function PostedScreen() {
     );
 
     // 4) After 0.6s appear + 1.5s hold = 2.1s, fade out over 0.4s
-    const t = setTimeout(() => {
+    holdTimerRef.current = setTimeout(() => {
       welcomeOpacity.value = withTiming(0, {
         duration: 400,
         easing: Easing.in(Easing.ease),
       });
       // 5) After fade out completes (0.4s), navigate to drops
-      const t2 = setTimeout(() => {
+      navigateTimerRef.current = setTimeout(() => {
         goToDrops();
       }, 420);
-      return () => clearTimeout(t2);
     }, 2100);
-    return () => clearTimeout(t);
+  }, [goToDrops, welcomeGlow, welcomeOpacity, welcomeScale, welcomeTranslateY]);
+
+  // ── Video player ─────────────────────────────────────────────────────────
+  const player = useVideoPlayer(
+    VIDEO_SOURCE,
+    (p) => {
+      p.loop = false;
+      p.muted = true;
+      p.play();
+    }
+  );
+
+  useEventListener(player, "statusChange", (event) => {
+    if (Platform.OS === "web" && event.status === "readyToPlay") {
+      // On web, the setup-time play() can run before the underlying video element
+      // is ready, so retry once the browser reports that playback can start.
+      player.play();
+    }
   });
+
+  // playToEnd → trigger WELCOME animation sequence → auto navigate
+  useEventListener(player, "playToEnd", () => {
+    startWelcomeSequence();
+  });
+
+  useEffect(() => {
+    // Keep the check-in flow moving even if the video end event is not delivered.
+    const fallbackTimer = setTimeout(() => {
+      startWelcomeSequence();
+    }, VIDEO_FALLBACK_MS);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
+    };
+  }, [startWelcomeSequence]);
 
   // ── Animated styles ───────────────────────────────────────────────────────
   const welcomeStyle = useAnimatedStyle(() => ({
