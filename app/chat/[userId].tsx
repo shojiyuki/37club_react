@@ -18,13 +18,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
+import { useChatContextPost } from "@/hooks/use-chat-context-post";
 import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useAppMode } from "@/lib/app-mode-context";
-import {
-  MOCK_POSTS,
-  MOCK_USERS,
-  ChatMessage,
-} from "@/lib/mock-data";
+import { ChatMessage } from "@/lib/mock-data";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -73,14 +70,12 @@ export default function ChatDetailScreen() {
   }>();
 
   const userId = params.userId ?? "";
-  const user = MOCK_USERS.find((u) => u.id === userId);
-  const userName = params.userName ?? user?.name ?? "ユーザー";
   const postId = params.postId;
-
-  // Find a post by this user for context header
-  const contextPost = postId
-    ? MOCK_POSTS.find((p) => p.id === postId)
-    : MOCK_POSTS.find((p) => p.user.id === userId);
+  const { userName, contextPost } = useChatContextPost({
+    userId,
+    userName: params.userName,
+    postId,
+  });
 
   const { messages, sendMessage } = useChatMessages(userId);
   const [inputText, setInputText] = useState("");
