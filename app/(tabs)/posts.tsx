@@ -34,7 +34,7 @@ import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useFollow } from "@/hooks/use-follow";
 import { usePosts } from "@/hooks/use-posts";
 import { useAppMode } from "@/lib/app-mode-context";
-import {
+import type {
   MockPost,
   ChatMessage,
   FollowState,

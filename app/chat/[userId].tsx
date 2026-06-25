@@ -21,7 +21,7 @@ import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useChatContextPost } from "@/hooks/use-chat-context-post";
 import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useAppMode } from "@/lib/app-mode-context";
-import { ChatMessage } from "@/lib/mock-data";
+import type { ChatMessage } from "@/lib/mock-data";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
