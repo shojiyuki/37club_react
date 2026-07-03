@@ -1,4 +1,14 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import {
+  double,
+  index,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  varchar,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -25,4 +35,76 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+export const topics = mysqlTable(
+  "topics",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    startAt: timestamp("startAt").notNull(),
+    endAt: timestamp("endAt").notNull(),
+    locationName: varchar("locationName", { length: 255 }).notNull(),
+    latitude: double("latitude").notNull(),
+    longitude: double("longitude").notNull(),
+    prompt: text("prompt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [index("topics_start_at_idx").on(table.startAt), index("topics_end_at_idx").on(table.endAt)],
+);
+
+export type Topic = typeof topics.$inferSelect;
+export type InsertTopic = typeof topics.$inferInsert;
+
+export const posts = mysqlTable(
+  "posts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    topicId: int("topicId")
+      .notNull()
+      .references(() => topics.id, { onDelete: "restrict" }),
+    imageStorageKey: varchar("imageStorageKey", { length: 1024 }).notNull(),
+    caption: text("caption").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("posts_user_topic_unique").on(table.userId, table.topicId),
+    index("posts_user_id_idx").on(table.userId),
+    index("posts_topic_id_idx").on(table.topicId),
+  ],
+);
+
+export type Post = typeof posts.$inferSelect;
+export type InsertPost = typeof posts.$inferInsert;
+
+export const participations = mysqlTable(
+  "participations",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    topicId: int("topicId")
+      .notNull()
+      .references(() => topics.id, { onDelete: "restrict" }),
+    postId: int("postId")
+      .notNull()
+      .references(() => posts.id, { onDelete: "restrict" }),
+    status: mysqlEnum("status", ["active", "checked_out", "expired"]).default("active").notNull(),
+    checkedInAt: timestamp("checkedInAt").defaultNow().notNull(),
+    checkedOutAt: timestamp("checkedOutAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("participations_user_topic_unique").on(table.userId, table.topicId),
+    uniqueIndex("participations_post_id_unique").on(table.postId),
+    index("participations_user_status_idx").on(table.userId, table.status),
+    index("participations_topic_status_idx").on(table.topicId, table.status),
+  ],
+);
+
+export type Participation = typeof participations.$inferSelect;
+export type InsertParticipation = typeof participations.$inferInsert;
