@@ -137,6 +137,122 @@ pnpm test         # test
 pnpm db:push      # Drizzle migration
 ```
 
+## ローカルMySQL
+
+local API / DB開発用のMySQLは、`compose.yaml` でDockerコンテナとして起動します。
+
+接続情報:
+
+```text
+host: 127.0.0.1
+port: 3306
+database: 37club
+user: admin
+password: root
+root password: root
+```
+
+これらはローカル開発専用の値です。本番環境では使いません。
+
+### Dockerの起動
+
+この開発環境ではColimaと `docker-compose` を使います。
+
+```sh
+colima start
+colima status
+```
+
+MySQLコンテナを起動します。
+
+```sh
+pnpm db:local:up
+```
+
+起動状態とログの確認:
+
+```sh
+docker-compose ps
+pnpm db:local:logs
+```
+
+`db:local:logs` はログを表示し続けます。終了するときは `Ctrl+C` を押します。
+
+MySQLコンテナの停止:
+
+```sh
+pnpm db:local:down
+```
+
+通常の停止ではDocker volumeを削除しないため、DBデータは次回起動時も残ります。
+
+### migration
+
+DB schemaは `drizzle/schema.ts` で定義し、migrationは `drizzle/` 配下で管理します。
+
+```sh
+pnpm db:push
+```
+
+`pnpm db:push` は以下を順番に実行します。
+
+```text
+drizzle-kit generate
+  -> drizzle/schema.tsと既存migrationの差分からSQLを生成
+
+drizzle-kit migrate
+  -> 未適用のmigrationをMySQLへ適用
+```
+
+MySQLコンテナが起動し、`.env` に `DATABASE_URL` が設定された状態で実行します。
+
+`.env.local` を `.env` へ反映する場合:
+
+```sh
+node scripts/sync-env.js local
+```
+
+### MySQLへ接続する
+
+application userでMySQLへ接続:
+
+```sh
+docker exec -it 37club-mysql mysql -uadmin -proot 37club
+```
+
+root userで接続:
+
+```sh
+docker exec -it 37club-mysql mysql -uroot -proot
+```
+
+MySQL接続後の主なコマンド:
+
+```sql
+SHOW DATABASES;
+USE 37club;
+SHOW TABLES;
+DESCRIBE users;
+SELECT * FROM users;
+EXIT;
+```
+
+### DBを初期化する
+
+次のコマンドはコンテナとDocker volumeを削除します。ローカルDBのデータはすべて消えます。
+
+```sh
+docker-compose down -v
+```
+
+初期化後はMySQLを再起動し、migrationを再適用します。
+
+```sh
+pnpm db:local:up
+node scripts/sync-env.js local
+pnpm db:push
+```
+
 ## 現状メモ
 
 主要プロダクト機能のうち、DROPS / chat / check-in / topics はまだ mock 中心です。
