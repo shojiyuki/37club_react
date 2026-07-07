@@ -35,6 +35,28 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
+export const authAccounts = mysqlTable(
+  "auth_accounts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 64 }).notNull(),
+    issuer: varchar("issuer", { length: 255 }).notNull(),
+    subject: varchar("subject", { length: 255 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("auth_accounts_issuer_subject_unique").on(table.issuer, table.subject),
+    index("auth_accounts_user_id_idx").on(table.userId),
+  ],
+);
+
+export type AuthAccount = typeof authAccounts.$inferSelect;
+export type InsertAuthAccount = typeof authAccounts.$inferInsert;
+
 export const topics = mysqlTable(
   "topics",
   {
