@@ -1,18 +1,38 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import type { User } from "@/drizzle/schema";
 import { cognitoAuthClient } from "@/lib/auth/cognito-auth-client";
 import { trpc } from "@/lib/trpc";
 
-type UseAuthOptions = {
+type AuthContextValue = {
+  user: User | null;
+  loading: boolean;
+  error: Error | null;
+  isAuthenticated: boolean;
+  signIn(): Promise<void>;
+  refresh(): Promise<User | null>;
+  logout(): Promise<void>;
+};
+
+type AuthProviderProps = {
+  children: ReactNode;
   autoFetch?: boolean;
 };
+
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 function toError(error: unknown, fallbackMessage: string): Error {
   return error instanceof Error ? error : new Error(fallbackMessage);
 }
 
-export function useAuth(options?: UseAuthOptions) {
-  const { autoFetch = true } = options ?? {};
+export function AuthProvider({ children, autoFetch = true }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(autoFetch);
   const [error, setError] = useState<Error | null>(null);
@@ -80,8 +100,6 @@ export function useAuth(options?: UseAuthOptions) {
     }
   }, []);
 
-  const isAuthenticated = useMemo(() => Boolean(user), [user]);
-
   useEffect(() => {
     if (!autoFetch) {
       setLoading(false);
@@ -89,17 +107,30 @@ export function useAuth(options?: UseAuthOptions) {
     }
 
     void fetchUser().catch(() => {
-      // The hook exposes the failure through error state.
+      // The provider exposes restoration failures through error state.
     });
   }, [autoFetch, fetchUser]);
 
-  return {
-    user,
-    loading,
-    error,
-    isAuthenticated,
-    signIn,
-    refresh: fetchUser,
-    logout,
-  };
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      loading,
+      error,
+      isAuthenticated: Boolean(user),
+      signIn,
+      refresh: fetchUser,
+      logout,
+    }),
+    [error, fetchUser, loading, logout, signIn, user],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth(): AuthContextValue {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return context;
 }

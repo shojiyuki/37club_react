@@ -19,6 +19,7 @@ import { router } from "expo-router";
 import React from "react";
 import {
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,6 +28,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Polyline } from "react-native-svg";
+import { useAuth } from "@/hooks/use-auth";
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -103,8 +105,27 @@ function Section({ children }: { children: React.ReactNode }) {
 
 export default function MyPageScreen() {
   const insets = useSafeAreaInsets();
+  const { logout, loading } = useAuth();
+
+  async function performLogOut() {
+    try {
+      await logout();
+      router.replace("/login" as any);
+    } catch {
+      Alert.alert("Log Out Failed", "ログアウトに失敗しました。もう一度お試しください。");
+    }
+  }
 
   function handleLogOut() {
+    if (loading) return;
+
+    if (Platform.OS === "web") {
+      if (window.confirm("ログアウトしますか？")) {
+        void performLogOut();
+      }
+      return;
+    }
+
     Alert.alert(
       "Log Out",
       "ログアウトしますか？",
@@ -113,9 +134,7 @@ export default function MyPageScreen() {
         {
           text: "Log Out",
           style: "destructive",
-          onPress: () => {
-            router.replace("/(tabs)/index" as any);
-          },
+          onPress: () => void performLogOut(),
         },
       ],
       { cancelable: true }

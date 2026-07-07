@@ -1,9 +1,6 @@
 import { ThemedView } from "@/components/themed-view";
-import * as WebBrowser from "expo-web-browser";
 import { ActivityIndicator, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-WebBrowser.maybeCompleteAuthSession();
 
 export default function OAuthCallback() {
   return (

@@ -10,6 +10,8 @@ import {
   type DiscoveryDocument,
   type TokenResponse,
 } from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
+import { Platform } from "react-native";
 import { runtimeConfig } from "@/constants/runtime-config";
 import type { AuthClient, AuthTokenSet } from "./auth-client";
 import {
@@ -44,6 +46,20 @@ function createRedirectUri(): string {
     path: "oauth/callback",
     preferLocalhost: true,
   });
+}
+
+function createSignOutRedirectUri(): string {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    return `${window.location.origin}/`;
+  }
+  return "club37://auth/signout";
+}
+
+function createLogoutUrl(domain: string, clientId: string, redirectUri: string): string {
+  const url = new URL(`${domain}/logout`);
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("logout_uri", redirectUri);
+  return url.toString();
 }
 
 function toAuthTokenSet(response: TokenResponse, refreshToken?: string): AuthTokenSet {
@@ -99,6 +115,8 @@ export class CognitoAuthClient implements AuthClient {
       scopes: config.scopes,
       usePKCE: true,
     });
+    // Web local currently relies on Expo's popup/localStorage handshake. Some browsers
+    // lose that session across Cognito redirects; use a same-tab PKCE flow if Web is revisited.
     const result = await request.promptAsync(discovery);
 
     if (result.type !== "success") {
@@ -180,9 +198,21 @@ export class CognitoAuthClient implements AuthClient {
           },
         );
       }
+    } catch (error) {
+      console.warn("[Auth] Cognito token revocation failed", error);
     } finally {
       await clearTokenSet();
     }
+
+    const redirectUri = createSignOutRedirectUri();
+    const logoutUrl = createLogoutUrl(config.domain, config.clientId, redirectUri);
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.location.assign(logoutUrl);
+      await new Promise<never>(() => {});
+    }
+
+    await WebBrowser.openAuthSessionAsync(logoutUrl, redirectUri);
   }
 }
 

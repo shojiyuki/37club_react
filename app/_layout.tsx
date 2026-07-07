@@ -1,11 +1,12 @@
 import "@/global.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Redirect, Stack, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
-import { Platform } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, View } from "react-native";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
 import {
@@ -19,6 +20,10 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
 import { AppModeProvider } from "@/lib/app-mode-context";
+import { runtimeConfig } from "@/constants/runtime-config";
+import { AuthProvider, useAuth } from "@/hooks/use-auth";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const DEFAULT_WEB_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
@@ -26,6 +31,41 @@ const DEFAULT_WEB_FRAME: Rect = { x: 0, y: 0, width: 0, height: 0 };
 export const unstable_settings = {
   anchor: "(tabs)",
 };
+
+function AppNavigator() {
+  const segments = useSegments();
+  const { user, loading } = useAuth();
+  const authRequired = runtimeConfig.dataSource === "api";
+  const isPublicAuthRoute = segments[0] === "login" || segments[0] === "oauth";
+
+  if (authRequired && loading) {
+    return (
+      <View style={styles.authLoading}>
+        <ActivityIndicator color="#00D8FF" />
+      </View>
+    );
+  }
+
+  if (authRequired && !user && !isPublicAuthRoute) {
+    return <Redirect href="/login" />;
+  }
+
+  if (authRequired && user && segments[0] === "login") {
+    return <Redirect href="/" />;
+  }
+
+  return (
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="login" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="check-in" options={{ presentation: "fullScreenModal" }} />
+        <Stack.Screen name="oauth/callback" />
+      </Stack>
+      <StatusBar style="light" />
+    </>
+  );
+}
 
 export default function RootLayout() {
   const initialInsets = initialWindowMetrics?.insets ?? DEFAULT_WEB_INSETS;
@@ -84,15 +124,9 @@ export default function RootLayout() {
       <AppModeProvider>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          {/* Default to hiding native headers so raw route segments don't appear (e.g. "(tabs)", "products/[id]"). */}
-          {/* If a screen needs the native header, explicitly enable it and set a human title via Stack.Screen options. */}
-          {/* in order for ios apps tab switching to work properly, use presentation: "fullScreenModal" for login page, whenever you decide to use presentation: "modal*/}
-            <Stack screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="(tabs)" />
-              <Stack.Screen name="check-in" options={{ presentation: "fullScreenModal" }} />
-              <Stack.Screen name="oauth/callback" />
-            </Stack>
-          <StatusBar style="light" />
+          <AuthProvider autoFetch={runtimeConfig.dataSource === "api"}>
+            <AppNavigator />
+          </AuthProvider>
         </QueryClientProvider>
       </trpc.Provider>
       </AppModeProvider>
@@ -121,3 +155,12 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  authLoading: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#070812",
+  },
+});
