@@ -21,11 +21,6 @@ const bundleId =
       return /^[a-zA-Z]/.test(segment) ? segment : "x" + segment;
     })
     .join(".") || "space.manus.app";
-// Extract timestamp from bundle ID and prefix with "manus" for deep link scheme
-// e.g., "space.manus.my.app.t20240115103045" -> "manus20240115103045"
-const timestamp = bundleId.split(".").pop()?.replace(/^t/, "") ?? "";
-const schemeFromBundleId = `manus${timestamp}`;
-
 type AppEnv = "local" | "development" | "production";
 type DataSource = "mock" | "api";
 
@@ -48,6 +43,10 @@ const dataSourceByEnv: Record<AppEnv, DataSource> = {
   production: (process.env.DATA_SOURCE_PRODUCTION as DataSource | undefined) ?? (process.env.DATA_SOURCE as DataSource | undefined) ?? "api",
 };
 
+const cognitoScopes = (process.env.COGNITO_SCOPES ?? "openid email")
+  .split(/[\s,]+/)
+  .filter(Boolean);
+
 const env = {
   // App branding - update these values directly (do not use env vars)
   appName: "37Club",
@@ -55,7 +54,7 @@ const env = {
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
   logoUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663361652736/6YZszJFNyR2og9uytmtY2B/37club-icon-BVFyYX3p2zer6VNyjjXoad.png",
-  scheme: schemeFromBundleId,
+  scheme: "club37",
   iosBundleId: bundleId,
   androidPackage: bundleId,
   appEnv,
@@ -66,6 +65,10 @@ const env = {
   appId: process.env.EXPO_PUBLIC_APP_ID ?? process.env.VITE_APP_ID ?? "",
   ownerOpenId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? process.env.OWNER_OPEN_ID ?? "",
   ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? process.env.OWNER_NAME ?? "",
+  cognitoIssuer: process.env.COGNITO_ISSUER ?? "",
+  cognitoDomain: process.env.COGNITO_DOMAIN ?? "",
+  cognitoClientId: process.env.COGNITO_CLIENT_ID ?? "",
+  cognitoScopes,
 };
 
 const config: ExpoConfig = {
@@ -172,6 +175,10 @@ const config: ExpoConfig = {
     appId: env.appId,
     ownerOpenId: env.ownerOpenId,
     ownerName: env.ownerName,
+    cognitoIssuer: env.cognitoIssuer,
+    cognitoDomain: env.cognitoDomain,
+    cognitoClientId: env.cognitoClientId,
+    cognitoScopes: env.cognitoScopes,
   },
 };
 

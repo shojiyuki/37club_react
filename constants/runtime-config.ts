@@ -12,6 +12,10 @@ type RuntimeConfig = {
   appId: string;
   ownerOpenId: string;
   ownerName: string;
+  cognitoIssuer: string;
+  cognitoDomain: string;
+  cognitoClientId: string;
+  cognitoScopes: string[];
 };
 
 const extra = (Constants.expoConfig?.extra ?? {}) as Partial<RuntimeConfig>;
@@ -33,5 +37,10 @@ export const runtimeConfig: RuntimeConfig = {
   appId: typeof extra.appId === "string" ? extra.appId : "",
   ownerOpenId: typeof extra.ownerOpenId === "string" ? extra.ownerOpenId : "",
   ownerName: typeof extra.ownerName === "string" ? extra.ownerName : "",
+  cognitoIssuer: typeof extra.cognitoIssuer === "string" ? extra.cognitoIssuer : "",
+  cognitoDomain: typeof extra.cognitoDomain === "string" ? extra.cognitoDomain : "",
+  cognitoClientId: typeof extra.cognitoClientId === "string" ? extra.cognitoClientId : "",
+  cognitoScopes: Array.isArray(extra.cognitoScopes)
+    ? extra.cognitoScopes.filter((scope): scope is string => typeof scope === "string")
+    : [],
 };
-
