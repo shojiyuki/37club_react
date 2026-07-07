@@ -3,7 +3,7 @@ import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/server/routers";
 import { getApiBaseUrl } from "@/constants/oauth";
-import * as Auth from "@/lib/_core/auth";
+import { cognitoAuthClient } from "@/lib/auth/cognito-auth-client";
 
 /**
  * tRPC React client for type-safe API calls.
@@ -26,15 +26,8 @@ export function createTRPCClient() {
         // tRPC v11: transformer MUST be inside httpBatchLink, not at root
         transformer: superjson,
         async headers() {
-          const token = await Auth.getSessionToken();
+          const token = await cognitoAuthClient.getValidAccessToken();
           return token ? { Authorization: `Bearer ${token}` } : {};
-        },
-        // Custom fetch to include credentials for cookie-based auth
-        fetch(url, options) {
-          return fetch(url, {
-            ...options,
-            credentials: "include",
-          });
         },
       }),
     ],

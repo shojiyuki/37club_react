@@ -4,5 +4,7 @@ export const ENV = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+  cognitoIssuer: process.env.COGNITO_ISSUER ?? "",
+  cognitoClientId: process.env.COGNITO_CLIENT_ID ?? "",
   isProduction: process.env.NODE_ENV === "production",
 };

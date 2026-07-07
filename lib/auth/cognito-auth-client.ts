@@ -64,6 +64,7 @@ function isAccessTokenFresh(tokenSet: AuthTokenSet): boolean {
 
 export class CognitoAuthClient implements AuthClient {
   private discoveryPromise: Promise<DiscoveryDocument> | null = null;
+  private restorePromise: Promise<AuthTokenSet | null> | null = null;
 
   private getDiscovery(): Promise<DiscoveryDocument> {
     if (!this.discoveryPromise) {
@@ -124,10 +125,8 @@ export class CognitoAuthClient implements AuthClient {
     return tokenSet;
   }
 
-  async restore(): Promise<AuthTokenSet | null> {
+  private async restoreTokenSet(): Promise<AuthTokenSet | null> {
     const current = getMemoryTokenSet();
-    if (current && isAccessTokenFresh(current)) return current;
-
     const refreshToken = current?.refreshToken ?? (await getStoredRefreshToken());
     if (!refreshToken) return null;
 
@@ -136,6 +135,20 @@ export class CognitoAuthClient implements AuthClient {
     } catch {
       await clearTokenSet();
       return null;
+    }
+  }
+
+  async restore(): Promise<AuthTokenSet | null> {
+    const current = getMemoryTokenSet();
+    if (current && isAccessTokenFresh(current)) return current;
+
+    const restorePromise = (this.restorePromise ??= this.restoreTokenSet());
+    try {
+      return await restorePromise;
+    } finally {
+      if (this.restorePromise === restorePromise) {
+        this.restorePromise = null;
+      }
     }
   }
 
