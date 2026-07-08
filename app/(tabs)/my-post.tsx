@@ -14,6 +14,7 @@ import {
   Alert,
   Dimensions,
   Image,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -44,20 +45,29 @@ export default function MyDropScreen() {
   const insets = useSafeAreaInsets();
   const { myPost } = useMyPost();
 
+  function navigateToLightsOut() {
+    router.push("/lights-out" as any);
+  }
+
   function handleCheckOut() {
+    const message = "トピックを退出しますか？\nチェックアウト後はこのトピックに再参加できません。";
+
+    if (Platform.OS === "web") {
+      if (window.confirm(message)) {
+        navigateToLightsOut();
+      }
+      return;
+    }
+
     Alert.alert(
       "Check Out",
-      "トピックを退出しますか？\nチェックアウト後はこのトピックに再参加できません。",
+      message,
       [
         { text: "キャンセル", style: "cancel" },
         {
           text: "Check Out",
           style: "destructive",
-          onPress: () => {
-            // Navigate to LIGHTS OUT animation screen
-            // exitCommunity() is called inside lights-out.tsx after animation completes
-            router.push("/lights-out" as any);
-          },
+          onPress: navigateToLightsOut,
         },
       ],
       { cancelable: true }

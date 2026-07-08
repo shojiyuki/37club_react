@@ -6,7 +6,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
-import { ActivityIndicator, Platform, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
 import {
@@ -19,7 +19,7 @@ import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 
 import { trpc, createTRPCClient } from "@/lib/trpc";
 import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
-import { AppModeProvider } from "@/lib/app-mode-context";
+import { AppModeProvider, useAppMode } from "@/lib/app-mode-context";
 import { runtimeConfig } from "@/constants/runtime-config";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 
@@ -35,13 +35,25 @@ export const unstable_settings = {
 function AppNavigator() {
   const segments = useSegments();
   const { user, loading } = useAuth();
+  const { isParticipationLoading, participationError, refreshParticipation } = useAppMode();
   const authRequired = runtimeConfig.dataSource === "api";
   const isPublicAuthRoute = segments[0] === "login" || segments[0] === "oauth";
 
-  if (authRequired && loading) {
+  if (authRequired && (loading || (user && isParticipationLoading))) {
     return (
       <View style={styles.authLoading}>
         <ActivityIndicator color="#00D8FF" />
+      </View>
+    );
+  }
+
+  if (authRequired && user && participationError) {
+    return (
+      <View style={styles.authLoading}>
+        <Text style={styles.participationError}>参加状態を取得できませんでした</Text>
+        <Pressable style={styles.retryButton} onPress={() => void refreshParticipation()}>
+          <Text style={styles.retryButtonText}>再試行</Text>
+        </Pressable>
       </View>
     );
   }
@@ -121,15 +133,15 @@ export default function RootLayout() {
 
   const content = (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AppModeProvider>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
           <AuthProvider autoFetch={runtimeConfig.dataSource === "api"}>
-            <AppNavigator />
+            <AppModeProvider>
+              <AppNavigator />
+            </AppModeProvider>
           </AuthProvider>
         </QueryClientProvider>
       </trpc.Provider>
-      </AppModeProvider>
     </GestureHandlerRootView>
   );
 
@@ -162,5 +174,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#070812",
+  },
+  participationError: {
+    color: "#FFFFFF",
+    fontSize: 16,
+  },
+  retryButton: {
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: "#00D8FF",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryButtonText: {
+    color: "#00D8FF",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

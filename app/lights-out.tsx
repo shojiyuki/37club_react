@@ -17,7 +17,7 @@ import { useEventListener } from "expo";
 import { router } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Dimensions, StyleSheet, View } from "react-native";
+import { ActivityIndicator, Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -49,8 +49,13 @@ export default function LightsOutScreen() {
   const insets = useSafeAreaInsets();
   const { exitCommunity } = useAppMode();
   const navigated = useRef(false);
+  const checkoutInFlight = useRef(false);
+  const checkoutCompleted = useRef(false);
   const reverseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [reverseReady, setReverseReady] = useState(false);
+  const [checkoutStatus, setCheckoutStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
 
   // ── Animated values ──────────────────────────────────────────────────────
   const lightsOutOpacity = useSharedValue(0);
@@ -61,9 +66,29 @@ export default function LightsOutScreen() {
   const navigate = useCallback(() => {
     if (navigated.current) return;
     navigated.current = true;
-    exitCommunity();
-    router.replace("/(tabs)/index" as any);
+    router.replace("/");
+  }, []);
+
+  const runCheckOut = useCallback(async () => {
+    if (checkoutInFlight.current || checkoutCompleted.current) return;
+
+    checkoutInFlight.current = true;
+    setCheckoutStatus("loading");
+
+    try {
+      await exitCommunity();
+      checkoutCompleted.current = true;
+      setCheckoutStatus("ready");
+    } catch {
+      setCheckoutStatus("error");
+    } finally {
+      checkoutInFlight.current = false;
+    }
   }, [exitCommunity]);
+
+  useEffect(() => {
+    void runCheckOut();
+  }, [runCheckOut]);
 
   // ── Video player ─────────────────────────────────────────────────────────
   const player = useVideoPlayer(
@@ -84,7 +109,7 @@ export default function LightsOutScreen() {
 
   // Start reverse playback once video is ready
   useEffect(() => {
-    if (!reverseReady) return;
+    if (!reverseReady || checkoutStatus !== "ready") return;
 
     const duration = player.duration;
     if (!duration || duration <= 0) return;
@@ -118,7 +143,7 @@ export default function LightsOutScreen() {
         reverseTimerRef.current = null;
       }
     };
-  }, [reverseReady]);
+  }, [checkoutStatus, reverseReady]);
 
   // ── LIGHTS OUT animation sequence ────────────────────────────────────────
   function startLightsOutSequence() {
@@ -163,7 +188,9 @@ export default function LightsOutScreen() {
       <View style={styles.overlay} pointerEvents="none" />
 
       {/* Block all touches during animation */}
-      <View style={StyleSheet.absoluteFillObject} pointerEvents="box-only" />
+      {checkoutStatus === "ready" ? (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="box-only" />
+      ) : null}
 
       {/* Center content */}
       <View style={styles.center}>
@@ -182,6 +209,21 @@ export default function LightsOutScreen() {
           LIGHTS OUT
         </Animated.Text>
       </View>
+
+      {checkoutStatus !== "ready" ? (
+        <View style={styles.checkoutStatus}>
+          {checkoutStatus === "loading" ? (
+            <ActivityIndicator color="#00D8FF" />
+          ) : (
+            <>
+              <Text style={styles.checkoutError}>チェックアウトできませんでした</Text>
+              <Pressable style={styles.retryButton} onPress={() => void runCheckOut()}>
+                <Text style={styles.retryButtonText}>再試行</Text>
+              </Pressable>
+            </>
+          )}
+        </View>
+      ) : null}
     </Animated.View>
   );
 }
@@ -212,5 +254,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "300",
     letterSpacing: 7,
+  },
+  checkoutStatus: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000000",
+  },
+  checkoutError: {
+    color: "#FFFFFF",
+    fontSize: 16,
+  },
+  retryButton: {
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: "#00D8FF",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryButtonText: {
+    color: "#00D8FF",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

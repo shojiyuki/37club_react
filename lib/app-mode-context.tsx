@@ -4,6 +4,9 @@ import React, {
   useContext,
   useState,
 } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { useParticipation } from "@/hooks/use-participation";
+import { getDataSource } from "@/lib/data-source";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +24,9 @@ interface AppModeContextValue {
    * null if not in DEMO mode or not yet posted.
    */
   demoPostedAt: string | null;
+  isParticipationLoading: boolean;
+  participationError: Error | null;
+  refreshParticipation: () => Promise<void>;
   /**
    * Call this AFTER a successful POST.
    * Sets isParticipant = true (community mode).
@@ -31,7 +37,7 @@ interface AppModeContextValue {
    * Call this when user confirms CHECK OUT.
    * Sets isParticipant = false (lobby mode).
    */
-  exitCommunity: () => void;
+  exitCommunity: () => Promise<void>;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -41,19 +47,27 @@ const AppModeContext = createContext<AppModeContextValue>({
   isParticipant: false,
   isDemo: false,
   demoPostedAt: null,
+  isParticipationLoading: false,
+  participationError: null,
+  refreshParticipation: async () => {},
   enterCommunity: () => {},
-  exitCommunity: () => {},
+  exitCommunity: async () => {},
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function AppModeProvider({ children }: { children: React.ReactNode }) {
-  const [isParticipant, setIsParticipant] = useState(false);
+  const isServerDataSource = getDataSource() === "api";
+  const { user, loading: isAuthLoading } = useAuth();
+  const participation = useParticipation({
+    enabled: !isServerDataSource || (!isAuthLoading && Boolean(user)),
+  });
+  const [localIsParticipant, setLocalIsParticipant] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
   const [demoPostedAt, setDemoPostedAt] = useState<string | null>(null);
 
   const enterCommunity = useCallback((opts?: { isDemo?: boolean }) => {
-    setIsParticipant(true);
+    setLocalIsParticipant(true);
     if (opts?.isDemo) {
       setIsDemo(true);
       setDemoPostedAt(new Date().toISOString());
@@ -63,17 +77,37 @@ export function AppModeProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const exitCommunity = useCallback(() => {
-    setIsParticipant(false);
+  const exitCommunity = useCallback(async () => {
+    if (isServerDataSource && !isDemo) {
+      await participation.checkOut();
+    }
+
+    setLocalIsParticipant(false);
     setIsDemo(false);
     setDemoPostedAt(null);
-  }, []);
+  }, [isDemo, isServerDataSource, participation.checkOut]);
+
+  const serverIsParticipant = participation.current?.participation?.status === "active";
+  const isParticipant = isDemo || (isServerDataSource ? serverIsParticipant : localIsParticipant);
+  const isParticipationLoading =
+    isServerDataSource && (isAuthLoading || (Boolean(user) && participation.isLoading));
+  const participationError = isServerDataSource ? participation.error : null;
 
   const mode: AppMode = isParticipant ? "community" : "lobby";
 
   return (
     <AppModeContext.Provider
-      value={{ mode, isParticipant, isDemo, demoPostedAt, enterCommunity, exitCommunity }}
+      value={{
+        mode,
+        isParticipant,
+        isDemo,
+        demoPostedAt,
+        isParticipationLoading,
+        participationError,
+        refreshParticipation: participation.refresh,
+        enterCommunity,
+        exitCommunity,
+      }}
     >
       {children}
     </AppModeContext.Provider>

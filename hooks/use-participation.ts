@@ -4,11 +4,12 @@ import { dataSources } from "@/lib/data";
 
 const CURRENT_PARTICIPATION_QUERY_KEY = ["participation", "current"] as const;
 
-export function useParticipation() {
+export function useParticipation({ enabled = true }: { enabled?: boolean } = {}) {
   const queryClient = useQueryClient();
   const currentQuery = useQuery({
     queryKey: CURRENT_PARTICIPATION_QUERY_KEY,
     queryFn: () => dataSources.participation.getCurrent(),
+    enabled,
   });
   const checkOutMutation = useMutation({
     mutationFn: () => dataSources.participation.checkOut(),
