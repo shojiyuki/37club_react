@@ -1,5 +1,5 @@
 import { createTRPCReact } from "@trpc/react-query";
-import { httpBatchLink } from "@trpc/client";
+import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/server/routers";
 import { getApiBaseUrl } from "@/constants/oauth";
@@ -14,22 +14,29 @@ import { cognitoAuthClient } from "@/lib/auth/cognito-auth-client";
  */
 export const trpc = createTRPCReact<AppRouter>();
 
+function createTRPCLinks() {
+  return [
+    httpBatchLink({
+      url: `${getApiBaseUrl()}/api/trpc`,
+      transformer: superjson,
+      async headers() {
+        const token = await cognitoAuthClient.getValidAccessToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+      },
+    }),
+  ];
+}
+
+export const apiTrpcClient = createTRPCProxyClient<AppRouter>({
+  links: createTRPCLinks(),
+});
+
 /**
  * Creates the tRPC client with proper configuration.
  * Call this once in your app's root layout.
  */
 export function createTRPCClient() {
   return trpc.createClient({
-    links: [
-      httpBatchLink({
-        url: `${getApiBaseUrl()}/api/trpc`,
-        // tRPC v11: transformer MUST be inside httpBatchLink, not at root
-        transformer: superjson,
-        async headers() {
-          const token = await cognitoAuthClient.getValidAccessToken();
-          return token ? { Authorization: `Bearer ${token}` } : {};
-        },
-      }),
-    ],
+    links: createTRPCLinks(),
   });
 }
