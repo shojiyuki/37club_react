@@ -6,4 +6,5 @@ const participationService = new ParticipationService(new DrizzleParticipationRe
 
 export const participationRouter = router({
   current: protectedProcedure.query(({ ctx }) => participationService.getCurrent(ctx.user.id)),
+  checkOut: protectedProcedure.mutation(({ ctx }) => participationService.checkOut(ctx.user.id)),
 });

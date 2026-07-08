@@ -12,6 +12,7 @@ function createRepository(): ParticipationRepository {
   return {
     findActiveByUserId: vi.fn(),
     markExpired: vi.fn(),
+    markCheckedOut: vi.fn(),
   };
 }
 
@@ -123,5 +124,55 @@ describe("ParticipationService", () => {
       serverNow: "2026-07-08T12:00:00.000Z",
     });
     expect(repository.markExpired).toHaveBeenCalledWith(10);
+  });
+
+  it("checks out the active participation using the server time", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(createRecord());
+    const service = new ParticipationService(repository, () => now);
+
+    await expect(service.checkOut(1)).resolves.toEqual({
+      participation: null,
+      topic: null,
+      post: null,
+      expiresAt: null,
+      serverNow: "2026-07-08T12:00:00.000Z",
+    });
+    expect(repository.markCheckedOut).toHaveBeenCalledWith(10, now);
+    expect(repository.markExpired).not.toHaveBeenCalled();
+  });
+
+  it("treats checkout without an active participation as successful", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
+    const service = new ParticipationService(repository, () => now);
+
+    await expect(service.checkOut(1)).resolves.toEqual({
+      participation: null,
+      topic: null,
+      post: null,
+      expiresAt: null,
+      serverNow: "2026-07-08T12:00:00.000Z",
+    });
+    expect(repository.markCheckedOut).not.toHaveBeenCalled();
+    expect(repository.markExpired).not.toHaveBeenCalled();
+  });
+
+  it("expires an ended participation instead of checking it out", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(
+      createRecord({
+        topic: {
+          ...createRecord().topic,
+          endAt: new Date("2026-07-08T12:00:00.000Z"),
+        },
+      }),
+    );
+    const service = new ParticipationService(repository, () => now);
+
+    await service.checkOut(1);
+
+    expect(repository.markExpired).toHaveBeenCalledWith(10);
+    expect(repository.markCheckedOut).not.toHaveBeenCalled();
   });
 });

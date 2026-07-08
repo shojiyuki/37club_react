@@ -11,6 +11,7 @@ export type ActiveParticipationRecord = {
 export interface ParticipationRepository {
   findActiveByUserId(userId: number): Promise<ActiveParticipationRecord | undefined>;
   markExpired(participationId: number): Promise<void>;
+  markCheckedOut(participationId: number, checkedOutAt: Date): Promise<void>;
 }
 
 export class DrizzleParticipationRepository implements ParticipationRepository {
@@ -40,6 +41,16 @@ export class DrizzleParticipationRepository implements ParticipationRepository {
     await db
       .update(participations)
       .set({ status: "expired" })
+      .where(and(eq(participations.id, participationId), eq(participations.status, "active")));
+  }
+
+  async markCheckedOut(participationId: number, checkedOutAt: Date): Promise<void> {
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    await db
+      .update(participations)
+      .set({ status: "checked_out", checkedOutAt })
       .where(and(eq(participations.id, participationId), eq(participations.status, "active")));
   }
 }

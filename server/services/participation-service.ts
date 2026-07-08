@@ -58,6 +58,23 @@ export class ParticipationService {
     return this.toCurrentResponse(record, now);
   }
 
+  async checkOut(userId: number): Promise<CurrentParticipationResponse> {
+    const now = this.clock();
+    const record = await this.repository.findActiveByUserId(userId);
+
+    if (!record) {
+      return this.emptyResponse(now);
+    }
+
+    if (record.topic.endAt <= now) {
+      await this.repository.markExpired(record.participation.id);
+      return this.emptyResponse(now);
+    }
+
+    await this.repository.markCheckedOut(record.participation.id, now);
+    return this.emptyResponse(now);
+  }
+
   private emptyResponse(now: Date): CurrentParticipationResponse {
     return {
       participation: null,
