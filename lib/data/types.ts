@@ -9,5 +9,6 @@ export type CurrentParticipation = RouterOutputs["participation"]["current"];
 export interface DataSources {
   participation: {
     getCurrent(): Promise<CurrentParticipation>;
+    checkOut(): Promise<CurrentParticipation>;
   };
 }

@@ -15,5 +15,8 @@ export const mockDataSources: DataSources = {
     async getCurrent() {
       return createEmptyCurrentParticipation();
     },
+    async checkOut() {
+      return createEmptyCurrentParticipation();
+    },
   },
 };

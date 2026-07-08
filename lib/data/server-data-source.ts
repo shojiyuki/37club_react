@@ -3,17 +3,25 @@ import { apiTrpcClient } from "../trpc";
 import type { CurrentParticipation, DataSources } from "./types";
 
 type GetCurrentParticipation = () => Promise<CurrentParticipation>;
+type CheckOutParticipation = () => Promise<CurrentParticipation>;
+
+type ServerDataSourceDependencies = {
+  getCurrentParticipation: GetCurrentParticipation;
+  checkOutParticipation: CheckOutParticipation;
+};
 
 export function createServerDataSources(
-  getCurrentParticipation: GetCurrentParticipation,
+  dependencies: ServerDataSourceDependencies,
 ): DataSources {
   return {
     participation: {
-      getCurrent: getCurrentParticipation,
+      getCurrent: dependencies.getCurrentParticipation,
+      checkOut: dependencies.checkOutParticipation,
     },
   };
 }
 
-export const serverDataSources = createServerDataSources(() =>
-  apiTrpcClient.participation.current.query(),
-);
+export const serverDataSources = createServerDataSources({
+  getCurrentParticipation: () => apiTrpcClient.participation.current.query(),
+  checkOutParticipation: () => apiTrpcClient.participation.checkOut.mutate(),
+});
