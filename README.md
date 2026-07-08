@@ -161,6 +161,18 @@ pnpm android
 
 Android Emulator / 実機での疎通は未確認です。
 
+## AWS S3 Development Storage
+
+CHECK IN画像は非公開のAWS S3 development bucketへ保存します。local serverは専用AWS profileを使用し、clientにはAWS credentialsを渡しません。
+
+設定・再現・疎通確認の詳細:
+
+```text
+.codex/wip/メモ/S3開発環境構築手順.md
+```
+
+実際のAccess key ID / Secret access keyはrepository、README、`.codex`へ保存しないでください。
+
 ## mock / API 切り替え
 
 開発時に mock データを見るか、API server を見るかは `.env` で切り替えます。
