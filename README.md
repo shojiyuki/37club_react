@@ -57,6 +57,110 @@ pnpm dev:server
 pnpm dev:metro
 ```
 
+## Native Development Build
+
+Cognito callback、SecureStore、cameraなどのNative挙動はExpo Goではなく、`expo-dev-client`を含む37Club専用Development Buildで確認します。
+
+前提:
+
+```text
+Xcode / iOS Simulator
+CocoaPods
+Docker MySQL
+local API用の.env設定
+```
+
+### iOS Simulatorの初回build
+
+Web用Metroがポート8081で動いている場合は、先に `Ctrl+C` で停止します。MySQLは起動したままで構いません。
+
+ターミナル1でAPI serverを起動します。
+
+```sh
+pnpm dev:server
+```
+
+ターミナル2でDevelopment Buildを作成し、Simulatorへinstallします。
+
+```sh
+pnpm exec expo run:ios --device "iPhone 15 Pro"
+```
+
+初回は次の処理が行われるため時間がかかります。
+
+```text
+app.config.ts
+  -> Expo Prebuild
+  -> ios/生成
+  -> CocoaPods依存導入
+  -> Xcode compile
+  -> 37Club.app生成
+  -> Simulatorへinstall
+  -> Metro起動
+```
+
+`ios/` はPrebuildで再生成するため、このrepositoryでは `.gitignore` の対象です。
+
+Development Clientの接続先選択画面が表示された場合、iOS Simulatorでは `http://localhost:8081` を選択します。
+
+### 2回目以降の起動
+
+Development BuildがSimulatorへinstall済みで、TypeScript / TSXだけを変更する通常開発ではNative buildをやり直す必要はありません。
+
+ターミナル1:
+
+```sh
+pnpm dev:server
+```
+
+ターミナル2:
+
+```sh
+pnpm exec expo start --dev-client
+```
+
+その後、Simulator上の37Club Development Buildを開き、Metroへ接続します。Metroのターミナルで `r` を押すとJavaScriptをreloadできます。
+
+次の変更後はDevelopment Buildを再作成します。
+
+```text
+Native libraryの追加・更新
+app.config.tsのscheme / Bundle ID変更
+Native権限の追加
+Expo config pluginの追加・変更
+Info.plist / entitlement相当の変更
+```
+
+再作成:
+
+```sh
+pnpm exec expo run:ios --device "iPhone 15 Pro"
+```
+
+### Simulatorと実機のAPI URL
+
+iOS SimulatorはMac上の `http://localhost:3000` に接続できます。
+
+実物のiPhoneでは `localhost` はiPhone自身を指します。Mac上のlocal APIへ接続する場合は、同じLAN上のMacのIP addressを `API_BASE_URL` に指定します。
+
+```text
+iOS Simulator
+  -> http://localhost:3000
+
+実機iPhone
+  -> http://<MacのLAN IP>:3000
+```
+
+### Android
+
+Android Development Buildは次のコマンドで作成します。
+
+```sh
+pnpm android
+```
+
+Android Emulator / 実機での疎通は未確認です。
+
 ## mock / API 切り替え
 
 開発時に mock データを見るか、API server を見るかは `.env` で切り替えます。
@@ -129,8 +233,8 @@ pnpm dev:development # copy .env.development, then dev
 pnpm dev:production  # copy .env.production, then dev
 pnpm dev:server   # server only
 pnpm dev:metro    # Expo Metro only
-pnpm ios          # iOS
-pnpm android      # Android
+pnpm ios          # iOS Development Buildをbuild / install
+pnpm android      # Android Development Buildをbuild / install
 pnpm check        # TypeScript check
 pnpm lint         # lint
 pnpm test         # test
