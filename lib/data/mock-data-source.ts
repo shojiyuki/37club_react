@@ -1,4 +1,4 @@
-import type { CurrentParticipation, DataSources } from "./types";
+import type { CreateUploadUrlInput, CurrentParticipation, DataSources } from "./types";
 
 function createEmptyCurrentParticipation(): CurrentParticipation {
   return {
@@ -17,6 +17,17 @@ export const mockDataSources: DataSources = {
     },
     async checkOut() {
       return createEmptyCurrentParticipation();
+    },
+  },
+  storage: {
+    async createUploadUrl(input: CreateUploadUrlInput) {
+      const extension = input.contentType === "image/png" ? "png" : "jpg";
+      const now = new Date();
+      return {
+        imageStorageKey: `mock/users/1/posts/mock-upload.${extension}`,
+        uploadUrl: "mock://storage/upload",
+        expiresAt: new Date(now.getTime() + 5 * 60 * 1000).toISOString(),
+      };
     },
   },
 };

@@ -34,6 +34,28 @@ drizzle/
   DB schema / migration
 ```
 
+## 開発環境
+
+Node.js は22系を使用します。AWS SDK v3の今後の更新でNode 22以上が要求されるため、このrepositoryではNode 22を前提にします。
+
+```sh
+nvm install
+nvm use
+node --version
+```
+
+期待値:
+
+```text
+v22.x.x
+```
+
+package managerは `pnpm@9.12.0` です。
+
+```sh
+pnpm --version
+```
+
 ## 起動方法
 
 依存を入れたあと、通常は以下で起動します。

@@ -10,12 +10,27 @@ vi.mock("../lib/trpc", () => ({
         mutate: vi.fn(),
       },
     },
+    storage: {
+      createUploadUrl: {
+        mutate: vi.fn(),
+      },
+    },
   },
 }));
 
 import { mockDataSources } from "../lib/data/mock-data-source";
 import { createServerDataSources } from "../lib/data/server-data-source";
-import type { CurrentParticipation } from "../lib/data/types";
+import type { CreateUploadUrlResponse, CurrentParticipation } from "../lib/data/types";
+
+function createCurrentParticipation(): CurrentParticipation {
+  return {
+    participation: null,
+    topic: null,
+    post: null,
+    expiresAt: null,
+    serverNow: "2026-07-09T00:00:00.000Z",
+  };
+}
 
 describe("participation data sources", () => {
   it("returns an empty current participation from the mock source", async () => {
@@ -31,18 +46,13 @@ describe("participation data sources", () => {
   });
 
   it("delegates current participation retrieval to the server client", async () => {
-    const current: CurrentParticipation = {
-      participation: null,
-      topic: null,
-      post: null,
-      expiresAt: null,
-      serverNow: "2026-07-09T00:00:00.000Z",
-    };
+    const current = createCurrentParticipation();
     const getCurrent = vi.fn().mockResolvedValue(current);
     const checkOut = vi.fn().mockResolvedValue(current);
     const sources = createServerDataSources({
       getCurrentParticipation: getCurrent,
       checkOutParticipation: checkOut,
+      createUploadUrl: vi.fn(),
     });
 
     await expect(sources.participation.getCurrent()).resolves.toBe(current);
@@ -61,21 +71,51 @@ describe("participation data sources", () => {
   });
 
   it("delegates checkout to the server client", async () => {
-    const current: CurrentParticipation = {
-      participation: null,
-      topic: null,
-      post: null,
-      expiresAt: null,
-      serverNow: "2026-07-09T00:00:00.000Z",
-    };
+    const current = createCurrentParticipation();
     const getCurrent = vi.fn().mockResolvedValue(current);
     const checkOut = vi.fn().mockResolvedValue(current);
     const sources = createServerDataSources({
       getCurrentParticipation: getCurrent,
       checkOutParticipation: checkOut,
+      createUploadUrl: vi.fn(),
     });
 
     await expect(sources.participation.checkOut()).resolves.toBe(current);
     expect(checkOut).toHaveBeenCalledOnce();
+  });
+
+  it("returns a mock upload URL target", async () => {
+    const result = await mockDataSources.storage.createUploadUrl({
+      contentType: "image/png",
+      contentLength: 70,
+    });
+
+    expect(result).toMatchObject({
+      imageStorageKey: "mock/users/1/posts/mock-upload.png",
+      uploadUrl: "mock://storage/upload",
+    });
+    expect(new Date(result.expiresAt).toISOString()).toBe(result.expiresAt);
+  });
+
+  it("delegates upload URL creation to the server client", async () => {
+    const uploadTarget: CreateUploadUrlResponse = {
+      imageStorageKey: "users/1/posts/test.jpg",
+      uploadUrl: "https://example.test/upload",
+      expiresAt: "2026-07-09T00:05:00.000Z",
+    };
+    const current = createCurrentParticipation();
+    const createUploadUrl = vi.fn().mockResolvedValue(uploadTarget);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl,
+    });
+    const input = {
+      contentType: "image/jpeg" as const,
+      contentLength: 1024,
+    };
+
+    await expect(sources.storage.createUploadUrl(input)).resolves.toBe(uploadTarget);
+    expect(createUploadUrl).toHaveBeenCalledWith(input);
   });
 });
