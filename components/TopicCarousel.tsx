@@ -413,8 +413,8 @@ export function TopicCarousel({
   const insets = useSafeAreaInsets();
 
   // ── Loop scroll: triplicate data so we can jump to center copy ────────────
-  // Only loop when there are topics; single-item lists don't need looping.
-  const canLoop = topics.length > 0;
+  // Only loop when there are multiple topics; single-item lists don't need duplication.
+  const canLoop = topics.length > 1;
   const loopedTopics = canLoop ? [...topics, ...topics, ...topics] : topics;
   const COUNT = topics.length;
 
@@ -426,6 +426,17 @@ export function TopicCarousel({
   const flatListRef = useRef<FlatList>(null);
   // Track whether we are in a programmatic jump to avoid re-triggering
   const isJumping = useRef(false);
+  const loopStateRef = useRef({
+    canLoop,
+    count: COUNT,
+  });
+
+  useEffect(() => {
+    loopStateRef.current = {
+      canLoop,
+      count: COUNT,
+    };
+  }, [canLoop, COUNT]);
 
   useEffect(() => {
     if (initialLoopIndex > 0) {
@@ -435,29 +446,29 @@ export function TopicCarousel({
     }
   }, [initialLoopIndex]);
 
-  const onViewableItemsChanged = useCallback(
-    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
-      if (viewableItems.length > 0 && viewableItems[0].index != null) {
-        const loopIdx = viewableItems[0].index;
-        const realIdx = canLoop ? loopIdx % COUNT : loopIdx;
-        setActiveRealIndex(realIdx);
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const { canLoop: currentCanLoop, count } = loopStateRef.current;
+    if (viewableItems.length === 0 || viewableItems[0].index == null || count === 0) {
+      return;
+    }
 
-        // Loop: if we've scrolled into the first or last copy, jump to center
-        if (canLoop && !isJumping.current) {
-          if (loopIdx < COUNT || loopIdx >= COUNT * 2) {
-            isJumping.current = true;
-            const targetIdx = COUNT + realIdx;
-            // Use a tiny delay so the snap animation finishes first
-            setTimeout(() => {
-              flatListRef.current?.scrollToIndex({ index: targetIdx, animated: false });
-              isJumping.current = false;
-            }, 50);
-          }
-        }
+    const loopIdx = viewableItems[0].index;
+    const realIdx = currentCanLoop ? loopIdx % count : loopIdx;
+    setActiveRealIndex(realIdx);
+
+    // Loop: if we've scrolled into the first or last copy, jump to center
+    if (currentCanLoop && !isJumping.current) {
+      if (loopIdx < count || loopIdx >= count * 2) {
+        isJumping.current = true;
+        const targetIdx = count + realIdx;
+        // Use a tiny delay so the snap animation finishes first
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index: targetIdx, animated: false });
+          isJumping.current = false;
+        }, 50);
       }
-    },
-    [canLoop, COUNT]
-  );
+    }
+  }, []);
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
@@ -543,12 +554,14 @@ export function TopicCarousel({
       </View>
 
       {/* PINNED empty state */}
-      {allTopicsEmpty ? (
+      {allTopicsEmpty || topics.length === 0 ? (
         <ScrollView
           contentContainerStyle={styles.emptyContainer}
           refreshControl={refreshControl}
         >
-          <Text style={styles.emptyText}>No pinned drops.</Text>
+          <Text style={styles.emptyText}>
+            {allTopicsEmpty ? "No pinned drops." : "No drops."}
+          </Text>
         </ScrollView>
       ) : (
         <>

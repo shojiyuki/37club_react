@@ -3,6 +3,7 @@ import { apiTrpcClient } from "../trpc";
 import type {
   AppMyPost,
   AppPost,
+  AppTopic,
   CheckInParticipationInput,
   CreateUploadUrlInput,
   CreateUploadUrlResponse,
@@ -16,8 +17,10 @@ type CheckOutParticipation = () => Promise<CurrentParticipation>;
 type CreateUploadUrl = (input: CreateUploadUrlInput) => Promise<CreateUploadUrlResponse>;
 type GetPosts = () => Promise<AppPost[]>;
 type GetMyPost = () => Promise<AppMyPost>;
+type GetTopics = () => Promise<AppTopic[]>;
 
 type ServerDataSourceDependencies = {
+  getTopics: GetTopics;
   getCurrentParticipation: GetCurrentParticipation;
   checkInParticipation: CheckInParticipation;
   checkOutParticipation: CheckOutParticipation;
@@ -30,6 +33,9 @@ export function createServerDataSources(
   dependencies: ServerDataSourceDependencies,
 ): DataSources {
   return {
+    topics: {
+      getAll: dependencies.getTopics,
+    },
     participation: {
       getCurrent: dependencies.getCurrentParticipation,
       checkIn: dependencies.checkInParticipation,
@@ -46,6 +52,7 @@ export function createServerDataSources(
 }
 
 export const serverDataSources = createServerDataSources({
+  getTopics: () => apiTrpcClient.topics.list.query(),
   getCurrentParticipation: () => apiTrpcClient.participation.current.query(),
   checkInParticipation: (input) => apiTrpcClient.participation.checkIn.mutate(input),
   checkOutParticipation: () => apiTrpcClient.participation.checkOut.mutate(),

@@ -26,6 +26,11 @@ vi.mock("../lib/trpc", () => ({
         query: vi.fn(),
       },
     },
+    topics: {
+      list: {
+        query: vi.fn(),
+      },
+    },
   },
 }));
 
@@ -34,6 +39,7 @@ import { createServerDataSources } from "../lib/data/server-data-source";
 import type {
   AppMyPost,
   AppPost,
+  AppTopic,
   CheckInParticipationInput,
   CreateUploadUrlResponse,
   CurrentParticipation,
@@ -51,6 +57,7 @@ function createCurrentParticipation(): CurrentParticipation {
 
 function createPostDependencies() {
   return {
+    getTopics: vi.fn().mockResolvedValue([] satisfies AppTopic[]),
     getPosts: vi.fn().mockResolvedValue([] satisfies AppPost[]),
     getMyPost: vi.fn().mockResolvedValue({
       imageUri: null,
@@ -83,6 +90,49 @@ describe("participation data sources", () => {
       expiresAt: null,
     });
     expect(new Date(result.serverNow).toISOString()).toBe(result.serverNow);
+  });
+
+  it("returns mock topics from the mock source", async () => {
+    const result = await mockDataSources.topics.getAll();
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]).toMatchObject({
+      id: expect.any(String),
+      startAt: expect.any(String),
+      dateLabel: expect.any(String),
+      location: expect.any(String),
+      lat: expect.any(Number),
+      lng: expect.any(Number),
+      items: expect.any(String),
+    });
+  });
+
+  it("delegates topic retrieval to the server client", async () => {
+    const topics: AppTopic[] = [
+      {
+        id: "1",
+        startAt: "2026-07-09T15:39:01.000Z",
+        dateLabel: "2026/07/10（金）00:39",
+        location: "杉並区阿佐谷南3丁目付近",
+        lat: 35.7030952,
+        lng: 139.6301901,
+        items: "赤いもの",
+      },
+    ];
+    const current = createCurrentParticipation();
+    const getTopics = vi.fn().mockResolvedValue(topics);
+    const sources = createServerDataSources({
+      getTopics,
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+      getPosts: vi.fn(),
+      getMyPost: vi.fn(),
+    });
+
+    await expect(sources.topics.getAll()).resolves.toBe(topics);
+    expect(getTopics).toHaveBeenCalledOnce();
   });
 
   it("delegates current participation retrieval to the server client", async () => {
@@ -234,6 +284,7 @@ describe("participation data sources", () => {
       checkInParticipation: vi.fn().mockResolvedValue(current),
       checkOutParticipation: vi.fn().mockResolvedValue(current),
       createUploadUrl: vi.fn(),
+      getTopics: vi.fn(),
       getPosts,
       getMyPost: vi.fn(),
     });
@@ -256,6 +307,7 @@ describe("participation data sources", () => {
       checkInParticipation: vi.fn().mockResolvedValue(current),
       checkOutParticipation: vi.fn().mockResolvedValue(current),
       createUploadUrl: vi.fn(),
+      getTopics: vi.fn(),
       getPosts: vi.fn(),
       getMyPost,
     });

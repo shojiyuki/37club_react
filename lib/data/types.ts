@@ -35,7 +35,21 @@ export type AppMyPost = {
   topicLabel: string;
 };
 
+export type AppTopic = {
+  id: string;
+  startAt: string;
+  dateLabel: string;
+  location: string;
+  lat: number;
+  lng: number;
+  items: string;
+  isDemo?: boolean;
+};
+
 export interface DataSources {
+  topics: {
+    getAll(): Promise<AppTopic[]>;
+  };
   participation: {
     getCurrent(): Promise<CurrentParticipation>;
     checkIn(input: CheckInParticipationInput): Promise<CurrentParticipation>;
