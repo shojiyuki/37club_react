@@ -1,18 +1,19 @@
-import { useCallback, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
-import { MOCK_POSTS, type MockPost } from "@/lib/mock-data";
+import { dataSources } from "@/lib/data";
+
+export const POSTS_QUERY_KEY = ["posts", "current-topic"] as const;
 
 export function usePosts() {
-  const [posts, setPosts] = useState<MockPost[]>(MOCK_POSTS);
-
-  const refreshPosts = useCallback(() => {
-    setPosts(MOCK_POSTS);
-  }, []);
+  const postsQuery = useQuery({
+    queryKey: POSTS_QUERY_KEY,
+    queryFn: () => dataSources.posts.getAll(),
+  });
 
   return {
-    posts,
-    refreshPosts,
-    isLoading: false,
-    error: null,
+    posts: postsQuery.data ?? [],
+    refreshPosts: postsQuery.refetch,
+    isLoading: postsQuery.isLoading,
+    error: postsQuery.error,
   };
 }

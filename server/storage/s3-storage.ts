@@ -67,7 +67,7 @@ export class S3Storage implements Storage {
       Bucket: this.bucket,
       Key: key,
     });
-    return getSignedUrl(this.client, command, { expiresIn: 60 * 5 });
+    return getSignedUrl(this.client, command, { expiresIn: 60 * 60 });
   }
 
   async getObjectMetadata(key: string): Promise<ObjectMetadata | null> {

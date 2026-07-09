@@ -18,12 +18,22 @@ vi.mock("../lib/trpc", () => ({
         mutate: vi.fn(),
       },
     },
+    posts: {
+      listCurrentTopic: {
+        query: vi.fn(),
+      },
+      myCurrent: {
+        query: vi.fn(),
+      },
+    },
   },
 }));
 
 import { mockDataSources } from "../lib/data/mock-data-source";
 import { createServerDataSources } from "../lib/data/server-data-source";
 import type {
+  AppMyPost,
+  AppPost,
   CheckInParticipationInput,
   CreateUploadUrlResponse,
   CurrentParticipation,
@@ -36,6 +46,18 @@ function createCurrentParticipation(): CurrentParticipation {
     post: null,
     expiresAt: null,
     serverNow: "2026-07-09T00:00:00.000Z",
+  };
+}
+
+function createPostDependencies() {
+  return {
+    getPosts: vi.fn().mockResolvedValue([] satisfies AppPost[]),
+    getMyPost: vi.fn().mockResolvedValue({
+      imageUri: null,
+      caption: "",
+      postedAt: "",
+      topicLabel: "",
+    } satisfies AppMyPost),
   };
 }
 
@@ -72,6 +94,7 @@ describe("participation data sources", () => {
       checkInParticipation: vi.fn().mockResolvedValue(current),
       checkOutParticipation: checkOut,
       createUploadUrl: vi.fn(),
+      ...createPostDependencies(),
     });
 
     await expect(sources.participation.getCurrent()).resolves.toBe(current);
@@ -109,6 +132,7 @@ describe("participation data sources", () => {
       checkInParticipation: checkIn,
       checkOutParticipation: vi.fn().mockResolvedValue(current),
       createUploadUrl: vi.fn(),
+      ...createPostDependencies(),
     });
 
     await expect(sources.participation.checkIn(checkInInput)).resolves.toBe(current);
@@ -135,6 +159,7 @@ describe("participation data sources", () => {
       checkInParticipation: vi.fn().mockResolvedValue(current),
       checkOutParticipation: checkOut,
       createUploadUrl: vi.fn(),
+      ...createPostDependencies(),
     });
 
     await expect(sources.participation.checkOut()).resolves.toBe(current);
@@ -167,6 +192,7 @@ describe("participation data sources", () => {
       checkInParticipation: vi.fn().mockResolvedValue(current),
       checkOutParticipation: vi.fn().mockResolvedValue(current),
       createUploadUrl,
+      ...createPostDependencies(),
     });
     const input = {
       contentType: "image/jpeg" as const,
@@ -175,5 +201,66 @@ describe("participation data sources", () => {
 
     await expect(sources.storage.createUploadUrl(input)).resolves.toBe(uploadTarget);
     expect(createUploadUrl).toHaveBeenCalledWith(input);
+  });
+
+  it("returns mock posts from the mock source", async () => {
+    const result = await mockDataSources.posts.getAll();
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]).toMatchObject({
+      id: expect.any(String),
+      imageUri: expect.any(String),
+      user: {
+        id: expect.any(String),
+        name: expect.any(String),
+      },
+    });
+  });
+
+  it("delegates post retrieval to the server client", async () => {
+    const posts: AppPost[] = [
+      {
+        id: "1",
+        user: { id: "1", name: "test", followState: "none" },
+        imageUri: "https://example.test/image.jpg",
+        caption: "caption",
+        topicId: "1",
+      },
+    ];
+    const current = createCurrentParticipation();
+    const getPosts = vi.fn().mockResolvedValue(posts);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+      getPosts,
+      getMyPost: vi.fn(),
+    });
+
+    await expect(sources.posts.getAll()).resolves.toBe(posts);
+    expect(getPosts).toHaveBeenCalledOnce();
+  });
+
+  it("delegates my post retrieval to the server client", async () => {
+    const myPost: AppMyPost = {
+      imageUri: "https://example.test/image.jpg",
+      caption: "caption",
+      postedAt: "2026-07-09T00:00:00.000Z",
+      topicLabel: "topic",
+    };
+    const current = createCurrentParticipation();
+    const getMyPost = vi.fn().mockResolvedValue(myPost);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+      getPosts: vi.fn(),
+      getMyPost,
+    });
+
+    await expect(sources.posts.getMyPost()).resolves.toBe(myPost);
+    expect(getMyPost).toHaveBeenCalledOnce();
   });
 });

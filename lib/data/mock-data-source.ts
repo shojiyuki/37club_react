@@ -1,9 +1,18 @@
 import type {
+  AppMyPost,
   CheckInParticipationInput,
   CreateUploadUrlInput,
   CurrentParticipation,
   DataSources,
 } from "./types";
+import { MOCK_POSTS } from "../mock-data";
+
+const MOCK_MY_POST: AppMyPost = {
+  imageUri: null,
+  caption: "赤いバラを持ってきた",
+  postedAt: "06:32",
+  topicLabel: "渋谷駅 ハチ公前",
+};
 
 function createEmptyCurrentParticipation(): CurrentParticipation {
   return {
@@ -60,6 +69,14 @@ export const mockDataSources: DataSources = {
     },
     async checkOut() {
       return createEmptyCurrentParticipation();
+    },
+  },
+  posts: {
+    async getAll() {
+      return MOCK_POSTS;
+    },
+    async getMyPost() {
+      return MOCK_MY_POST;
     },
   },
   storage: {
