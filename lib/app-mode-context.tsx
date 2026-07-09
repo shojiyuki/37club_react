@@ -24,6 +24,7 @@ interface AppModeContextValue {
    * null if not in DEMO mode or not yet posted.
    */
   demoPostedAt: string | null;
+  activeTopicStartAt: string | null;
   isParticipationLoading: boolean;
   participationError: Error | null;
   refreshParticipation: () => Promise<void>;
@@ -47,6 +48,7 @@ const AppModeContext = createContext<AppModeContextValue>({
   isParticipant: false,
   isDemo: false,
   demoPostedAt: null,
+  activeTopicStartAt: null,
   isParticipationLoading: false,
   participationError: null,
   refreshParticipation: async () => {},
@@ -88,6 +90,10 @@ export function AppModeProvider({ children }: { children: React.ReactNode }) {
   }, [isDemo, isServerDataSource, participation.checkOut]);
 
   const serverIsParticipant = participation.current?.participation?.status === "active";
+  const activeTopicStartAt =
+    isServerDataSource && serverIsParticipant
+      ? participation.current?.topic?.startAt ?? null
+      : null;
   const isParticipant = isDemo || (isServerDataSource ? serverIsParticipant : localIsParticipant);
   const isParticipationLoading =
     isServerDataSource && (isAuthLoading || (Boolean(user) && participation.isLoading));
@@ -102,6 +108,7 @@ export function AppModeProvider({ children }: { children: React.ReactNode }) {
         isParticipant,
         isDemo,
         demoPostedAt,
+        activeTopicStartAt,
         isParticipationLoading,
         participationError,
         refreshParticipation: participation.refresh,

@@ -6,6 +6,9 @@ vi.mock("../lib/trpc", () => ({
       current: {
         query: vi.fn(),
       },
+      checkIn: {
+        mutate: vi.fn(),
+      },
       checkOut: {
         mutate: vi.fn(),
       },
@@ -20,7 +23,11 @@ vi.mock("../lib/trpc", () => ({
 
 import { mockDataSources } from "../lib/data/mock-data-source";
 import { createServerDataSources } from "../lib/data/server-data-source";
-import type { CreateUploadUrlResponse, CurrentParticipation } from "../lib/data/types";
+import type {
+  CheckInParticipationInput,
+  CreateUploadUrlResponse,
+  CurrentParticipation,
+} from "../lib/data/types";
 
 function createCurrentParticipation(): CurrentParticipation {
   return {
@@ -33,6 +40,17 @@ function createCurrentParticipation(): CurrentParticipation {
 }
 
 describe("participation data sources", () => {
+  const checkInInput: CheckInParticipationInput = {
+    topicId: 1,
+    imageStorageKey: "users/1/posts/test.png",
+    caption: "赤いもの",
+    location: {
+      latitude: 35.6595,
+      longitude: 139.7005,
+      accuracy: 20,
+    },
+  };
+
   it("returns an empty current participation from the mock source", async () => {
     const result = await mockDataSources.participation.getCurrent();
 
@@ -51,12 +69,50 @@ describe("participation data sources", () => {
     const checkOut = vi.fn().mockResolvedValue(current);
     const sources = createServerDataSources({
       getCurrentParticipation: getCurrent,
+      checkInParticipation: vi.fn().mockResolvedValue(current),
       checkOutParticipation: checkOut,
       createUploadUrl: vi.fn(),
     });
 
     await expect(sources.participation.getCurrent()).resolves.toBe(current);
     expect(getCurrent).toHaveBeenCalledOnce();
+  });
+
+  it("returns an active current participation after mock check-in", async () => {
+    const result = await mockDataSources.participation.checkIn(checkInInput);
+
+    expect(result).toMatchObject({
+      participation: {
+        userId: 1,
+        topicId: checkInInput.topicId,
+        status: "active",
+      },
+      topic: {
+        id: checkInInput.topicId,
+        latitude: checkInInput.location.latitude,
+        longitude: checkInInput.location.longitude,
+      },
+      post: {
+        imageStorageKey: checkInInput.imageStorageKey,
+        caption: checkInInput.caption,
+      },
+    });
+    expect(new Date(result.serverNow).toISOString()).toBe(result.serverNow);
+    expect(new Date(result.expiresAt ?? "").toISOString()).toBe(result.expiresAt);
+  });
+
+  it("delegates check-in to the server client", async () => {
+    const current = createCurrentParticipation();
+    const checkIn = vi.fn().mockResolvedValue(current);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: checkIn,
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+    });
+
+    await expect(sources.participation.checkIn(checkInInput)).resolves.toBe(current);
+    expect(checkIn).toHaveBeenCalledWith(checkInInput);
   });
 
   it("returns an empty current participation after mock checkout", async () => {
@@ -76,6 +132,7 @@ describe("participation data sources", () => {
     const checkOut = vi.fn().mockResolvedValue(current);
     const sources = createServerDataSources({
       getCurrentParticipation: getCurrent,
+      checkInParticipation: vi.fn().mockResolvedValue(current),
       checkOutParticipation: checkOut,
       createUploadUrl: vi.fn(),
     });
@@ -107,6 +164,7 @@ describe("participation data sources", () => {
     const createUploadUrl = vi.fn().mockResolvedValue(uploadTarget);
     const sources = createServerDataSources({
       getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
       checkOutParticipation: vi.fn().mockResolvedValue(current),
       createUploadUrl,
     });

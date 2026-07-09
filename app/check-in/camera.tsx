@@ -183,7 +183,13 @@ export default function CameraScreen() {
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
 
-  const params = useLocalSearchParams<{ startAt?: string; remainingMs?: string; isDemo?: string }>();
+  const params = useLocalSearchParams<{
+    topicId?: string;
+    startAt?: string;
+    remainingMs?: string;
+    isDemo?: string;
+  }>();
+  const topicId = params.topicId;
   const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000 + 12 * 1000;
   const startAt = params.startAt ?? new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
   const isDemo = params.isDemo === "true";
@@ -231,6 +237,7 @@ export default function CameraScreen() {
         pathname: "/check-in/preview" as any,
         params: {
           uri: photo?.uri ?? "",
+          topicId,
           startAt,
           remainingMs: String(remainingMs),
           isDemo: isDemo ? "true" : "false",
@@ -239,7 +246,13 @@ export default function CameraScreen() {
     } catch {
       router.push({
         pathname: "/check-in/preview" as any,
-        params: { uri: "", startAt, remainingMs: String(remainingMs), isDemo: isDemo ? "true" : "false" },
+        params: {
+          uri: "",
+          topicId,
+          startAt,
+          remainingMs: String(remainingMs),
+          isDemo: isDemo ? "true" : "false",
+        },
       });
     } finally {
       setIsCapturing(false);

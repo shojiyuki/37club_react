@@ -561,7 +561,7 @@ function TabBar({
 
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
-  const { isDemo, demoPostedAt } = useAppMode();
+  const { isDemo, demoPostedAt, activeTopicStartAt } = useAppMode();
   const { posts } = usePosts();
   const { followingPosts, getFollowState, updateFollowState } = useFollow(posts);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
@@ -642,7 +642,7 @@ export default function PostsScreen() {
           liveDurationMs={5 * 60 * 1000}
         />
       ) : (
-        <LiveTimerHeaderTicking startAt={MOCK_START_AT} />
+        <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
       )}
 
       <TabBar

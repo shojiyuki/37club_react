@@ -471,6 +471,7 @@ export function TopicCarousel({
     router.push({
       pathname: "/check-in/camera" as any,
       params: {
+        topicId: activeTopic.id,
         startAt: activeTopic.startAt,
         remainingMs: String(remainingMs),
         isDemo: activeTopic.isDemo ? "true" : "false",

@@ -128,6 +128,12 @@ const config: ExpoConfig = {
       }
     ],
     [
+      "expo-location",
+      {
+        locationWhenInUsePermission: "Allow 37Club to use your location for check-in distance verification.",
+      },
+    ],
+    [
       "expo-audio",
       {
         microphonePermission: "Allow $(PRODUCT_NAME) to access your microphone.",
