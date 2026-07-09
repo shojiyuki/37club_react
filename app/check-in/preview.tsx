@@ -24,6 +24,8 @@ import { useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeader } from "@/components/LiveTimerHeader";
 import { useCreatePost } from "@/hooks/use-create-post";
+import { useStorageUploadTarget } from "@/hooks/use-storage-upload";
+import { loadUploadableImage, uploadImageToUrl } from "@/lib/storage/upload-image";
 
 const COLORS = {
   bg: "#070812",
@@ -47,6 +49,7 @@ const PILL_RADIUS = 28;
 export default function PreviewScreen() {
   const insets = useSafeAreaInsets();
   const { createPost, isLoading: isCreatingPost } = useCreatePost();
+  const { createUploadUrl, isCreatingUploadUrl } = useStorageUploadTarget();
   const params = useLocalSearchParams<{
     uri?: string;
     startAt?: string;
@@ -60,6 +63,7 @@ export default function PreviewScreen() {
   const isDemo = params.isDemo === "true";
 
   const [caption, setCaption] = useState("");
+  const [postError, setPostError] = useState<string | null>(null);
 
   // Breathing glow for CHECK IN button
   const glowOpacity = useSharedValue(0.35);
@@ -92,21 +96,35 @@ export default function PreviewScreen() {
   }
 
   async function handlePost() {
-    if (isCreatingPost) return;
+    if (isCreatingPost || isCreatingUploadUrl) return;
+    setPostError(null);
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-    await createPost({
-      imageUri: uri,
-      caption,
-      startAt,
-      remainingMs,
-      isDemo,
-    });
-    router.push({
-      pathname: "/check-in/posting" as any,
-      params: { startAt, remainingMs: String(remainingMs), isDemo: isDemo ? "true" : "false" },
-    });
+    try {
+      const image = await loadUploadableImage(uri);
+      const uploadTarget = await createUploadUrl({
+        contentType: image.contentType,
+        contentLength: image.contentLength,
+      });
+      await uploadImageToUrl({
+        uploadUrl: uploadTarget.uploadUrl,
+        image,
+      });
+      await createPost({
+        imageUri: uri,
+        caption,
+        startAt,
+        remainingMs,
+        isDemo,
+      });
+      router.push({
+        pathname: "/check-in/posting" as any,
+        params: { startAt, remainingMs: String(remainingMs), isDemo: isDemo ? "true" : "false" },
+      });
+    } catch {
+      setPostError("CHECK INに失敗しました。もう一度お試しください。");
+    }
   }
 
   return (
@@ -164,11 +182,13 @@ export default function PreviewScreen() {
             onPress={handlePost}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
-            disabled={isCreatingPost}
+            disabled={isCreatingPost || isCreatingUploadUrl}
           >
             <Text style={styles.checkInLabel}>CHECK IN</Text>
           </Pressable>
         </View>
+
+        {postError ? <Text style={styles.errorText}>{postError}</Text> : null}
 
         {/* RETAKE — small outline button below */}
         <Pressable
@@ -292,6 +312,14 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 2,
     textTransform: "uppercase",
+  },
+  errorText: {
+    width: SQUARE_SIZE,
+    color: "#FF8AA0",
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
+    textAlign: "center",
   },
   // RETAKE — small outline button
   retakeButton: {
