@@ -117,7 +117,7 @@ function ChatRow({
 
 export default function ChatListScreen() {
   const insets = useSafeAreaInsets();
-  const { isDemo, demoPostedAt, activeTopicStartAt } = useAppMode();
+  const { activeTopicStartAt } = useAppMode();
   const { chatUsers } = useChatList();
 
   function handleUserPress(userId: string, userName: string, imageUri?: string) {
@@ -129,14 +129,7 @@ export default function ChatListScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {isDemo && demoPostedAt ? (
-        <LiveTimerHeaderTicking
-          startAt={demoPostedAt}
-          liveDurationMs={5 * 60 * 1000}
-        />
-      ) : (
-        <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
-      )}
+      <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
 
       <View style={styles.header}>
         <Text style={styles.headerTitle}>CHAT</Text>

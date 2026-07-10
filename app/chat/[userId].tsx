@@ -61,7 +61,7 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 
 export default function ChatDetailScreen() {
   const insets = useSafeAreaInsets();
-  const { isDemo, demoPostedAt, activeTopicStartAt } = useAppMode();
+  const { activeTopicStartAt } = useAppMode();
   const params = useLocalSearchParams<{
     userId?: string;
     userName?: string;
@@ -106,14 +106,7 @@ export default function ChatDetailScreen() {
       keyboardVerticalOffset={0}
     >
       {/* LIVE Timer */}
-      {isDemo && demoPostedAt ? (
-        <LiveTimerHeaderTicking
-          startAt={demoPostedAt}
-          liveDurationMs={5 * 60 * 1000}
-        />
-      ) : (
-        <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
-      )}
+      <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
 
       {/* Context header */}
       <View style={styles.contextHeader}>

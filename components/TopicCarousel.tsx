@@ -36,10 +36,6 @@ export interface Topic {
   lat: number;
   lng: number;
   items: string;
-  /**
-   * DEMO mode: always LIVE, skip location check, 5-min timer after posting.
-   */
-  isDemo?: boolean;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -57,8 +53,6 @@ const COLORS = {
   neonGlow: "rgba(0,216,255,0.55)",
   borderNormal: "#1A1F3A",
   borderLive: "#00D8FF",
-  demoBadgeBg: "rgba(0,216,255,0.12)",
-  demoBadgeBorder: "rgba(0,216,255,0.35)",
 };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -74,11 +68,7 @@ const PILL_RADIUS = 28;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function getLiveState(startAt: string, isDemo?: boolean): { isLive: boolean; remainingMs: number } {
-  // DEMO topics are always LIVE
-  if (isDemo) {
-    return { isLive: true, remainingMs: LIVE_DURATION_MS };
-  }
+function getLiveState(startAt: string): { isLive: boolean; remainingMs: number } {
   const start = new Date(startAt).getTime();
   const now = Date.now();
   const elapsed = now - start;
@@ -98,7 +88,7 @@ function formatCountdown(ms: number): string {
 function getInitialIndex(topics: Topic[]): number {
   const now = Date.now();
   const liveTopics = topics
-    .map((t, i) => ({ i, ...getLiveState(t.startAt, t.isDemo) }))
+    .map((t, i) => ({ i, ...getLiveState(t.startAt) }))
     .filter((x) => x.isLive);
 
   if (liveTopics.length > 0) {
@@ -240,19 +230,10 @@ function TopicCard({ topic, isLive, pinned, onTogglePin }: TopicCardProps) {
   return (
     <View style={[styles.cardGlowWrapper, isLive && styles.cardGlowWrapperLive]}>
       <View style={[styles.card, isLive ? styles.cardLive : styles.cardNormal]}>
-
-        {/* DEMO badge — top-right corner (only for demo, no pin overlap) */}
-        {topic.isDemo && (
-          <View style={styles.demoBadge}>
-            <Text style={styles.demoBadgeText}>DEMO</Text>
-          </View>
-        )}
-
-        {/* 📌 Pin button — top-right (shifted left if DEMO badge present) */}
+        {/* 📌 Pin button — top-right */}
         <Pressable
           style={[
             styles.pinButton,
-            topic.isDemo && styles.pinButtonWithDemo,
           ]}
           onPress={() => {
             if (Platform.OS !== "web") {
@@ -356,21 +337,16 @@ function HorizontalLine() {
   );
 }
 
-function CountdownTimer({ startAt, isDemo }: { startAt: string; isDemo?: boolean }) {
-  const [remainingMs, setRemainingMs] = useState(() => getLiveState(startAt, isDemo).remainingMs);
+function CountdownTimer({ startAt }: { startAt: string }) {
+  const [remainingMs, setRemainingMs] = useState(() => getLiveState(startAt).remainingMs);
 
   useEffect(() => {
-    if (isDemo) {
-      // DEMO: show fixed 37:00 (timer starts after posting)
-      setRemainingMs(LIVE_DURATION_MS);
-      return;
-    }
     const interval = setInterval(() => {
-      const { remainingMs: ms } = getLiveState(startAt, isDemo);
+      const { remainingMs: ms } = getLiveState(startAt);
       setRemainingMs(ms);
     }, 500);
     return () => clearInterval(interval);
-  }, [startAt, isDemo]);
+  }, [startAt]);
 
   return (
     <View style={styles.timerArea}>
@@ -473,7 +449,7 @@ export function TopicCarousel({
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   const activeTopic = topics[activeRealIndex];
-  const { isLive, remainingMs } = getLiveState(activeTopic?.startAt ?? "", activeTopic?.isDemo);
+  const { isLive, remainingMs } = getLiveState(activeTopic?.startAt ?? "");
 
   const handleEnter = () => {
     if (Platform.OS !== "web") {
@@ -485,14 +461,13 @@ export function TopicCarousel({
         topicId: activeTopic.id,
         startAt: activeTopic.startAt,
         remainingMs: String(remainingMs),
-        isDemo: activeTopic.isDemo ? "true" : "false",
       },
     });
   };
 
   const renderItem = useCallback(
     ({ item, index }: { item: Topic; index: number }) => {
-      const { isLive: cardIsLive } = getLiveState(item.startAt, item.isDemo);
+      const { isLive: cardIsLive } = getLiveState(item.startAt);
       return (
         <View style={styles.cardWrapper}>
           <TopicCard
@@ -549,7 +524,7 @@ export function TopicCarousel({
       {/* Top: countdown timer (only when LIVE) — placed 24px below safe area */}
       <View style={styles.topArea}>
         {isLive && activeTopic && (
-          <CountdownTimer startAt={activeTopic.startAt} isDemo={activeTopic.isDemo} />
+          <CountdownTimer startAt={activeTopic.startAt} />
         )}
       </View>
 
@@ -718,25 +693,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderLive,
     borderWidth: 1.5,
   },
-  // DEMO badge
-  demoBadge: {
-    position: "absolute",
-    top: 14,
-    right: 48, // shifted left to make room for pin button
-    backgroundColor: COLORS.demoBadgeBg,
-    borderWidth: 1,
-    borderColor: COLORS.demoBadgeBorder,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  demoBadgeText: {
-    color: COLORS.neon,
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 1.5,
-    opacity: 0.8,
-  },
   // Pin button on card
   pinButton: {
     position: "absolute",
@@ -747,10 +703,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     zIndex: 5,
-  },
-  pinButtonWithDemo: {
-    // When DEMO badge is present, pin is already at right: 14
-    // DEMO badge is at right: 48, so no overlap
   },
   // Date/time — largest, bold
   cardDateTime: {

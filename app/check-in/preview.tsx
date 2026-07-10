@@ -24,7 +24,6 @@ import Animated, {
 import { useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeader } from "@/components/LiveTimerHeader";
-import { useCreatePost } from "@/hooks/use-create-post";
 import { useParticipation } from "@/hooks/use-participation";
 import { useStorageUploadTarget } from "@/hooks/use-storage-upload";
 import { loadUploadableImage, uploadImageToUrl } from "@/lib/storage/upload-image";
@@ -67,7 +66,6 @@ async function getCurrentCheckInLocation() {
 
 export default function PreviewScreen() {
   const insets = useSafeAreaInsets();
-  const { createPost, isLoading: isCreatingPost } = useCreatePost();
   const { checkIn, isCheckingIn } = useParticipation();
   const { createUploadUrl, isCreatingUploadUrl } = useStorageUploadTarget();
   const params = useLocalSearchParams<{
@@ -75,14 +73,12 @@ export default function PreviewScreen() {
     topicId?: string;
     startAt?: string;
     remainingMs?: string;
-    isDemo?: string;
   }>();
 
   const uri = params.uri ?? "";
   const topicId = params.topicId ? parseInt(params.topicId, 10) : null;
   const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000;
   const startAt = params.startAt ?? new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
-  const isDemo = params.isDemo === "true";
 
   const [caption, setCaption] = useState("");
   const [postError, setPostError] = useState<string | null>(null);
@@ -118,13 +114,13 @@ export default function PreviewScreen() {
   }
 
   async function handlePost() {
-    if (isCreatingPost || isCreatingUploadUrl || isCheckingIn) return;
+    if (isCreatingUploadUrl || isCheckingIn) return;
     setPostError(null);
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
     try {
-      if (!isDemo && (!topicId || !Number.isFinite(topicId))) {
+      if (!topicId || !Number.isFinite(topicId)) {
         throw new Error("Topic ID is missing");
       }
       const image = await loadUploadableImage(uri);
@@ -136,30 +132,16 @@ export default function PreviewScreen() {
         uploadUrl: uploadTarget.uploadUrl,
         image,
       });
-      if (isDemo) {
-        await createPost({
-          imageUri: uri,
-          caption,
-          startAt,
-          remainingMs,
-          isDemo,
-        });
-      } else {
-        const checkedInTopicId = topicId;
-        if (checkedInTopicId === null) {
-          throw new Error("Topic ID is missing");
-        }
-        const location = await getCurrentCheckInLocation();
-        await checkIn({
-          topicId: checkedInTopicId,
-          imageStorageKey: uploadTarget.imageStorageKey,
-          caption,
-          location,
-        });
-      }
+      const location = await getCurrentCheckInLocation();
+      await checkIn({
+        topicId,
+        imageStorageKey: uploadTarget.imageStorageKey,
+        caption,
+        location,
+      });
       router.push({
         pathname: "/check-in/posting" as any,
-        params: { startAt, remainingMs: String(remainingMs), isDemo: isDemo ? "true" : "false" },
+        params: { startAt, remainingMs: String(remainingMs) },
       });
     } catch (error) {
       console.error("[check-in preview] failed", error);
@@ -222,7 +204,7 @@ export default function PreviewScreen() {
             onPress={handlePost}
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
-            disabled={isCreatingPost || isCreatingUploadUrl || isCheckingIn}
+            disabled={isCreatingUploadUrl || isCheckingIn}
           >
             <Text style={styles.checkInLabel}>CHECK IN</Text>
           </Pressable>

@@ -85,7 +85,6 @@ export type AppTopic = {
   lat: number;
   lng: number;
   items: string;
-  isDemo?: boolean;
 };
 
 export interface DataSources {

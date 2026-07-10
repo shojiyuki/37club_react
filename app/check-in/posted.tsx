@@ -15,7 +15,7 @@
  * 操作制御: 演出中はタップ操作を無効化
  */
 
-import { router, useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef } from "react";
 import { Dimensions, Platform, StyleSheet, Text, View } from "react-native";
 import Animated, {
@@ -44,8 +44,6 @@ const VIDEO_FALLBACK_MS = 3500;
 export default function PostedScreen() {
   const insets = useSafeAreaInsets();
   const { enterCommunity } = useAppMode();
-  const params = useLocalSearchParams<{ isDemo?: string; startAt?: string; remainingMs?: string }>();
-  const isDemo = params.isDemo === "true";
   const navigated = useRef(false);
   const sequenceStarted = useRef(false);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,9 +61,9 @@ export default function PostedScreen() {
   const goToDrops = useCallback(() => {
     if (navigated.current) return;
     navigated.current = true;
-    enterCommunity({ isDemo });
+    enterCommunity();
     router.replace("/(tabs)/posts" as any);
-  }, [enterCommunity, isDemo]);
+  }, [enterCommunity]);
 
   const startWelcomeSequence = useCallback(() => {
     if (sequenceStarted.current) return;

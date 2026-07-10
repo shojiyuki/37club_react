@@ -21,16 +21,6 @@ function buildMockTopics(): AppTopic[] {
 
   return [
     {
-      id: "demo",
-      startAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      dateLabel: "DEMO — いつでも参加可能",
-      location: "ANY LOCATION",
-      lat: 35.6895,
-      lng: 139.6917,
-      items: "自由に撮影してみよう",
-      isDemo: true,
-    },
-    {
       id: "1",
       startAt: getLiveStartTime(31.8),
       dateLabel: "2026/06/12（金）06:00",

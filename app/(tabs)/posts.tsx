@@ -582,7 +582,7 @@ function TabBar({
 
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
-  const { isDemo, demoPostedAt, activeTopicStartAt } = useAppMode();
+  const { activeTopicStartAt } = useAppMode();
   const { posts } = usePosts();
   const { followingPosts, getFollowState, updateFollowState } = useFollow(posts);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
@@ -674,15 +674,7 @@ export default function PostsScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      {isDemo && demoPostedAt ? (
-        // DEMO: 5-minute countdown from when user posted
-        <LiveTimerHeaderTicking
-          startAt={demoPostedAt}
-          liveDurationMs={5 * 60 * 1000}
-        />
-      ) : (
-        <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
-      )}
+      <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
 
       <TabBar
         activeTab={activeTab}

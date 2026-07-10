@@ -39,24 +39,24 @@ describe("Pinned topics logic", () => {
 
   it("should filter pinned topics correctly", () => {
     const topics = [
-      { id: "demo", dateLabel: "DEMO" },
       { id: "1", dateLabel: "Topic 1" },
       { id: "2", dateLabel: "Topic 2" },
+      { id: "3", dateLabel: "Topic 3" },
     ];
-    const pinnedIds = new Set(["demo", "2"]);
+    const pinnedIds = new Set(["1", "2"]);
 
     const pinned = topics.filter((t) => pinnedIds.has(t.id));
     expect(pinned).toHaveLength(2);
-    expect(pinned.map((t) => t.id)).toEqual(["demo", "2"]);
+    expect(pinned.map((t) => t.id)).toEqual(["1", "2"]);
   });
 
   it("should return all topics when showPinnedOnly is false", () => {
     const topics = [
-      { id: "demo" },
       { id: "1" },
       { id: "2" },
+      { id: "3" },
     ];
-    const pinnedIds = new Set(["demo"]);
+    const pinnedIds = new Set(["1"]);
     const showPinnedOnly = false;
 
     const displayed = showPinnedOnly
@@ -79,8 +79,8 @@ describe("Pinned topics logic", () => {
   });
 
   it("should cleanup stale pinned IDs not in valid list", () => {
-    const pinnedIds = new Set(["demo", "topic_999", "topic_1"]);
-    const validIds = ["demo", "topic_1", "topic_2"];
+    const pinnedIds = new Set(["topic_0", "topic_999", "topic_1"]);
+    const validIds = ["topic_0", "topic_1", "topic_2"];
     const validSet = new Set(validIds);
 
     const stale = [...pinnedIds].filter((id) => !validSet.has(id));
@@ -89,7 +89,7 @@ describe("Pinned topics logic", () => {
     const cleaned = new Set(pinnedIds);
     stale.forEach((id) => cleaned.delete(id));
     expect(cleaned.has("topic_999")).toBe(false);
-    expect(cleaned.has("demo")).toBe(true);
+    expect(cleaned.has("topic_0")).toBe(true);
     expect(cleaned.has("topic_1")).toBe(true);
   });
 
@@ -104,12 +104,12 @@ describe("Pinned topics logic", () => {
   });
 
   it("should serialize and deserialize pinned IDs correctly", () => {
-    const ids = ["demo", "topic_1", "topic_2"];
+    const ids = ["topic_0", "topic_1", "topic_2"];
     const serialized = JSON.stringify(ids);
     const deserialized: string[] = JSON.parse(serialized);
     const restored = new Set(deserialized);
 
-    expect(restored.has("demo")).toBe(true);
+    expect(restored.has("topic_0")).toBe(true);
     expect(restored.has("topic_1")).toBe(true);
     expect(restored.size).toBe(3);
   });

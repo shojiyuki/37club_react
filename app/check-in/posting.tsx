@@ -21,9 +21,8 @@ const RING_BORDER = 3;
 
 export default function PostingScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ startAt?: string; remainingMs?: string; isDemo?: string }>();
+  const params = useLocalSearchParams<{ startAt?: string; remainingMs?: string }>();
   const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000;
-  const isDemo = params.isDemo === "true";
 
   // Rotation animation
   const rotation = useSharedValue(0);
@@ -46,7 +45,6 @@ export default function PostingScreen() {
         params: {
           startAt: params.startAt,
           remainingMs: String(remainingMs),
-          isDemo: isDemo ? "true" : "false",
         },
       });
     }, 600);

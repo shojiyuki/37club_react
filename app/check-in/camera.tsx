@@ -187,12 +187,10 @@ export default function CameraScreen() {
     topicId?: string;
     startAt?: string;
     remainingMs?: string;
-    isDemo?: string;
   }>();
   const topicId = params.topicId;
   const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000 + 12 * 1000;
   const startAt = params.startAt ?? new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
-  const isDemo = params.isDemo === "true";
 
   // ── Permission handling ──────────────────────────────────────────────────
 
@@ -240,7 +238,6 @@ export default function CameraScreen() {
           topicId,
           startAt,
           remainingMs: String(remainingMs),
-          isDemo: isDemo ? "true" : "false",
         },
       });
     } catch {
@@ -251,7 +248,6 @@ export default function CameraScreen() {
           topicId,
           startAt,
           remainingMs: String(remainingMs),
-          isDemo: isDemo ? "true" : "false",
         },
       });
     } finally {

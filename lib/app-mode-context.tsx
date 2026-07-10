@@ -17,13 +17,6 @@ interface AppModeContextValue {
   mode: AppMode;
   /** true when user has successfully posted and is inside the 37-min community */
   isParticipant: boolean;
-  /** true when the current session is a DEMO topic (5-min timer, no location check) */
-  isDemo: boolean;
-  /**
-   * ISO string of when the user posted (used for DEMO 5-min countdown).
-   * null if not in DEMO mode or not yet posted.
-   */
-  demoPostedAt: string | null;
   activeTopicStartAt: string | null;
   isParticipationLoading: boolean;
   participationError: Error | null;
@@ -31,9 +24,8 @@ interface AppModeContextValue {
   /**
    * Call this AFTER a successful POST.
    * Sets isParticipant = true (community mode).
-   * Pass isDemo=true for DEMO topic sessions.
    */
-  enterCommunity: (opts?: { isDemo?: boolean }) => void;
+  enterCommunity: () => void;
   /**
    * Call this when user confirms CHECK OUT.
    * Sets isParticipant = false (lobby mode).
@@ -46,8 +38,6 @@ interface AppModeContextValue {
 const AppModeContext = createContext<AppModeContextValue>({
   mode: "lobby",
   isParticipant: false,
-  isDemo: false,
-  demoPostedAt: null,
   activeTopicStartAt: null,
   isParticipationLoading: false,
   participationError: null,
@@ -65,36 +55,25 @@ export function AppModeProvider({ children }: { children: React.ReactNode }) {
     enabled: !isServerDataSource || (!isAuthLoading && Boolean(user)),
   });
   const [localIsParticipant, setLocalIsParticipant] = useState(false);
-  const [isDemo, setIsDemo] = useState(false);
-  const [demoPostedAt, setDemoPostedAt] = useState<string | null>(null);
 
-  const enterCommunity = useCallback((opts?: { isDemo?: boolean }) => {
+  const enterCommunity = useCallback(() => {
     setLocalIsParticipant(true);
-    if (opts?.isDemo) {
-      setIsDemo(true);
-      setDemoPostedAt(new Date().toISOString());
-    } else {
-      setIsDemo(false);
-      setDemoPostedAt(null);
-    }
   }, []);
 
   const exitCommunity = useCallback(async () => {
-    if (isServerDataSource && !isDemo) {
+    if (isServerDataSource) {
       await participation.checkOut();
     }
 
     setLocalIsParticipant(false);
-    setIsDemo(false);
-    setDemoPostedAt(null);
-  }, [isDemo, isServerDataSource, participation.checkOut]);
+  }, [isServerDataSource, participation.checkOut]);
 
   const serverIsParticipant = participation.current?.participation?.status === "active";
   const activeTopicStartAt =
     isServerDataSource && serverIsParticipant
       ? participation.current?.topic?.startAt ?? null
       : null;
-  const isParticipant = isDemo || (isServerDataSource ? serverIsParticipant : localIsParticipant);
+  const isParticipant = isServerDataSource ? serverIsParticipant : localIsParticipant;
   const isParticipationLoading =
     isServerDataSource && (isAuthLoading || (Boolean(user) && participation.isLoading));
   const participationError = isServerDataSource ? participation.error : null;
@@ -106,8 +85,6 @@ export function AppModeProvider({ children }: { children: React.ReactNode }) {
       value={{
         mode,
         isParticipant,
-        isDemo,
-        demoPostedAt,
         activeTopicStartAt,
         isParticipationLoading,
         participationError,
