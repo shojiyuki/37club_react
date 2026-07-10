@@ -19,9 +19,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useChatContextPost } from "@/hooks/use-chat-context-post";
-import { useChatMessages } from "@/hooks/use-chat-messages";
+import { useChatMessages, type ChatMessage } from "@/hooks/use-chat-messages";
 import { useAppMode } from "@/lib/app-mode-context";
-import type { ChatMessage } from "@/lib/mock-data";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -66,6 +65,7 @@ export default function ChatDetailScreen() {
   const params = useLocalSearchParams<{
     userId?: string;
     userName?: string;
+    imageUri?: string;
     postId?: string;
   }>();
 
@@ -74,6 +74,7 @@ export default function ChatDetailScreen() {
   const { userName, contextPost } = useChatContextPost({
     userId,
     userName: params.userName,
+    imageUri: params.imageUri,
     postId,
   });
 

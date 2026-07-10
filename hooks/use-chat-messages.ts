@@ -1,44 +1,49 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-  MOCK_CHAT_BY_USER,
-  type ChatMessage,
-} from "@/lib/mock-data";
+import { dataSources } from "@/lib/data";
+import type { AppChatMessage } from "@/lib/data/types";
 
-const ME = "me";
+export type ChatMessage = AppChatMessage;
 
-function getMockMessages(userId?: string): ChatMessage[] {
-  if (!userId) return [];
-  return [...(MOCK_CHAT_BY_USER[userId] ?? [])];
-}
+export const chatMessagesQueryKey = (userId?: string) => ["chat", "messages", userId ?? ""] as const;
 
 export function useChatMessages(userId?: string) {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => getMockMessages(userId));
+  const queryClient = useQueryClient();
+  const queryKey = chatMessagesQueryKey(userId);
+  const messagesQuery = useQuery({
+    queryKey,
+    queryFn: () => dataSources.chat.messages({ targetUserId: userId ?? "" }),
+    enabled: !!userId,
+  });
+  const { data, error, isLoading, refetch } = messagesQuery;
 
   const resetMessages = useCallback(() => {
-    setMessages(getMockMessages(userId));
-  }, [userId]);
+    refetch();
+  }, [refetch]);
 
-  useEffect(() => {
-    resetMessages();
-  }, [resetMessages]);
+  const sendMessage = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || !userId) return;
 
-  const sendMessage = useCallback((text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const newMessage: ChatMessage = {
-      id: `m${Date.now()}`,
-      senderId: ME,
-      text: trimmed,
-    };
-    setMessages((prev) => [...prev, newMessage]);
-  }, []);
+      const message = await dataSources.chat.sendMessage({
+        targetUserId: userId,
+        body: trimmed,
+      });
+      queryClient.setQueryData<Awaited<ReturnType<typeof dataSources.chat.messages>>>(queryKey, (current) => ({
+        targetUser: current?.targetUser ?? { id: userId, name: "ユーザー" },
+        messages: [...(current?.messages ?? []), message],
+      }));
+    },
+    [queryClient, queryKey, userId],
+  );
 
   return {
-    messages,
+    messages: data?.messages ?? [],
     sendMessage,
     resetMessages,
-    isLoading: false,
-    error: null,
+    isLoading,
+    error,
   };
 }

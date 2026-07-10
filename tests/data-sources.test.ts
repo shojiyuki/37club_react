@@ -36,12 +36,26 @@ vi.mock("../lib/trpc", () => ({
         mutate: vi.fn(),
       },
     },
+    chat: {
+      list: {
+        query: vi.fn(),
+      },
+      messages: {
+        query: vi.fn(),
+      },
+      sendMessage: {
+        mutate: vi.fn(),
+      },
+    },
   },
 }));
 
 import { mockDataSources } from "../lib/data/mock-data-source";
 import { createServerDataSources } from "../lib/data/server-data-source";
 import type {
+  AppChatListItem,
+  AppChatMessage,
+  AppChatMessages,
   AppMyPost,
   AppPost,
   AppTopic,
@@ -75,6 +89,16 @@ function createPostDependencies() {
       targetUserId: "2",
       followState: "following",
     } satisfies SetFollowingResponse),
+    getChatList: vi.fn().mockResolvedValue([] satisfies AppChatListItem[]),
+    getChatMessages: vi.fn().mockResolvedValue({
+      targetUser: { id: "2", name: "user_2" },
+      messages: [],
+    } satisfies AppChatMessages),
+    sendChatMessage: vi.fn().mockResolvedValue({
+      id: "1",
+      senderId: "me",
+      text: "hello",
+    } satisfies AppChatMessage),
   };
 }
 
@@ -140,6 +164,9 @@ describe("participation data sources", () => {
       getPosts: vi.fn(),
       getMyPost: vi.fn(),
       setFollowing: vi.fn(),
+      getChatList: vi.fn(),
+      getChatMessages: vi.fn(),
+      sendChatMessage: vi.fn(),
     });
 
     await expect(sources.topics.getAll()).resolves.toBe(topics);
@@ -299,6 +326,9 @@ describe("participation data sources", () => {
       getPosts,
       getMyPost: vi.fn(),
       setFollowing: vi.fn(),
+      getChatList: vi.fn(),
+      getChatMessages: vi.fn(),
+      sendChatMessage: vi.fn(),
     });
 
     await expect(sources.posts.getAll()).resolves.toBe(posts);
@@ -323,6 +353,9 @@ describe("participation data sources", () => {
       getPosts: vi.fn(),
       getMyPost,
       setFollowing: vi.fn(),
+      getChatList: vi.fn(),
+      getChatMessages: vi.fn(),
+      sendChatMessage: vi.fn(),
     });
 
     await expect(sources.posts.getMyPost()).resolves.toBe(myPost);
@@ -345,10 +378,88 @@ describe("participation data sources", () => {
       getPosts: vi.fn(),
       getMyPost: vi.fn(),
       setFollowing,
+      getChatList: vi.fn(),
+      getChatMessages: vi.fn(),
+      sendChatMessage: vi.fn(),
     });
     const input = { targetUserId: "2", following: true };
 
     await expect(sources.follow.setFollowing(input)).resolves.toBe(response);
     expect(setFollowing).toHaveBeenCalledWith(input);
+  });
+
+  it("returns mock chat list from the mock source", async () => {
+    const result = await mockDataSources.chat.list();
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]).toMatchObject({
+      id: expect.any(String),
+      name: expect.any(String),
+      lastMessage: expect.any(String),
+      hasUnread: expect.any(Boolean),
+    });
+  });
+
+  it("delegates chat list retrieval to the server client", async () => {
+    const current = createCurrentParticipation();
+    const chatUsers: AppChatListItem[] = [
+      {
+        id: "2",
+        name: "follow_user_2",
+        imageUri: "https://example.test/image.jpg",
+        lastMessage: "hello",
+        hasUnread: false,
+      },
+    ];
+    const getChatList = vi.fn().mockResolvedValue(chatUsers);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+      ...createPostDependencies(),
+      getChatList,
+    });
+
+    await expect(sources.chat.list()).resolves.toBe(chatUsers);
+    expect(getChatList).toHaveBeenCalledOnce();
+  });
+
+  it("delegates chat message retrieval to the server client", async () => {
+    const current = createCurrentParticipation();
+    const messages: AppChatMessages = {
+      targetUser: { id: "2", name: "follow_user_2" },
+      messages: [{ id: "1", senderId: "me", text: "hello" }],
+    };
+    const getChatMessages = vi.fn().mockResolvedValue(messages);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+      ...createPostDependencies(),
+      getChatMessages,
+    });
+
+    await expect(sources.chat.messages({ targetUserId: "2" })).resolves.toBe(messages);
+    expect(getChatMessages).toHaveBeenCalledWith({ targetUserId: "2" });
+  });
+
+  it("delegates chat message sending to the server client", async () => {
+    const current = createCurrentParticipation();
+    const message: AppChatMessage = { id: "1", senderId: "me", text: "hello" };
+    const sendChatMessage = vi.fn().mockResolvedValue(message);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+      ...createPostDependencies(),
+      sendChatMessage,
+    });
+    const input = { targetUserId: "2", body: "hello" };
+
+    await expect(sources.chat.sendMessage(input)).resolves.toBe(message);
+    expect(sendChatMessage).toHaveBeenCalledWith(input);
   });
 });

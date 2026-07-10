@@ -17,6 +17,39 @@ export type SetFollowingResponse = {
   followState: AppFollowState;
 };
 
+export type AppChatListItem = {
+  id: string;
+  name: string;
+  imageUri?: string;
+  lastMessage: string;
+  hasUnread: boolean;
+};
+
+export type AppChatMessage = {
+  id: string;
+  senderId: string;
+  text: string;
+  createdAt?: string;
+};
+
+export type AppChatMessages = {
+  targetUser: {
+    id: string;
+    name: string;
+  };
+  messages: AppChatMessage[];
+};
+
+export type ChatMessagesInput = {
+  targetUserId: string;
+  limit?: number;
+};
+
+export type SendChatMessageInput = {
+  targetUserId: string;
+  body: string;
+};
+
 export type CreateUploadUrlInput = {
   contentType: "image/jpeg" | "image/png";
   contentLength: number;
@@ -70,6 +103,11 @@ export interface DataSources {
   };
   follow: {
     setFollowing(input: SetFollowingInput): Promise<SetFollowingResponse>;
+  };
+  chat: {
+    list(): Promise<AppChatListItem[]>;
+    messages(input: ChatMessagesInput): Promise<AppChatMessages>;
+    sendMessage(input: SendChatMessageInput): Promise<AppChatMessage>;
   };
   storage: {
     createUploadUrl(input: CreateUploadUrlInput): Promise<CreateUploadUrlResponse>;

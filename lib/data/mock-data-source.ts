@@ -1,13 +1,18 @@
 import type {
+  AppChatListItem,
+  AppChatMessage,
+  AppChatMessages,
   AppMyPost,
   AppTopic,
+  ChatMessagesInput,
   CheckInParticipationInput,
   CreateUploadUrlInput,
   CurrentParticipation,
   DataSources,
+  SendChatMessageInput,
   SetFollowingInput,
 } from "./types";
-import { MOCK_POSTS } from "../mock-data";
+import { MOCK_CHAT_BY_USER, MOCK_POSTS, MOCK_USERS } from "../mock-data";
 
 function buildMockTopics(): AppTopic[] {
   function getLiveStartTime(minutesAgo: number): string {
@@ -125,6 +130,44 @@ function createMockCurrentParticipation(input: CheckInParticipationInput): Curre
   };
 }
 
+function getMockChatMessages(userId: string | undefined): AppChatMessage[] {
+  if (!userId) return [];
+  return (MOCK_CHAT_BY_USER[userId] ?? []).map((message) => ({
+    id: message.id,
+    senderId: message.senderId,
+    text: message.text,
+  }));
+}
+
+function getMockChatList(): AppChatListItem[] {
+  const userPostImage: Record<string, string> = {};
+  for (const post of MOCK_POSTS) {
+    if (!userPostImage[post.user.id]) {
+      userPostImage[post.user.id] = post.imageUri;
+    }
+  }
+
+  return MOCK_USERS
+    .filter((user) => user.followState === "mutual")
+    .map((user) => {
+      const history = MOCK_CHAT_BY_USER[user.id] ?? [];
+      const last = history[history.length - 1];
+      const lastMessage = last
+        ? last.senderId === "me"
+          ? `あなた: ${last.text}`
+          : last.text
+        : "";
+
+      return {
+        id: user.id,
+        name: user.name,
+        imageUri: userPostImage[user.id],
+        lastMessage,
+        hasUnread: user.id === "u1",
+      };
+    });
+}
+
 export const mockDataSources: DataSources = {
   topics: {
     async getAll() {
@@ -155,6 +198,28 @@ export const mockDataSources: DataSources = {
       return {
         targetUserId: input.targetUserId,
         followState: input.following ? "following" : "none",
+      };
+    },
+  },
+  chat: {
+    async list() {
+      return getMockChatList();
+    },
+    async messages(input: ChatMessagesInput): Promise<AppChatMessages> {
+      const user = MOCK_USERS.find((mockUser) => mockUser.id === input.targetUserId);
+      return {
+        targetUser: {
+          id: input.targetUserId,
+          name: user?.name ?? "ユーザー",
+        },
+        messages: getMockChatMessages(input.targetUserId),
+      };
+    },
+    async sendMessage(input: SendChatMessageInput) {
+      return {
+        id: `m${Date.now()}`,
+        senderId: "me",
+        text: input.body.trim(),
       };
     },
   },

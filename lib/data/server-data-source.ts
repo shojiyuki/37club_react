@@ -1,14 +1,19 @@
 import { apiTrpcClient } from "../trpc";
 
 import type {
+  AppChatListItem,
+  AppChatMessage,
+  AppChatMessages,
   AppMyPost,
   AppPost,
   AppTopic,
+  ChatMessagesInput,
   CheckInParticipationInput,
   CreateUploadUrlInput,
   CreateUploadUrlResponse,
   CurrentParticipation,
   DataSources,
+  SendChatMessageInput,
   SetFollowingInput,
   SetFollowingResponse,
 } from "./types";
@@ -21,6 +26,9 @@ type GetPosts = () => Promise<AppPost[]>;
 type GetMyPost = () => Promise<AppMyPost>;
 type GetTopics = () => Promise<AppTopic[]>;
 type SetFollowing = (input: SetFollowingInput) => Promise<SetFollowingResponse>;
+type GetChatList = () => Promise<AppChatListItem[]>;
+type GetChatMessages = (input: ChatMessagesInput) => Promise<AppChatMessages>;
+type SendChatMessage = (input: SendChatMessageInput) => Promise<AppChatMessage>;
 
 type ServerDataSourceDependencies = {
   getTopics: GetTopics;
@@ -31,6 +39,9 @@ type ServerDataSourceDependencies = {
   getPosts: GetPosts;
   getMyPost: GetMyPost;
   setFollowing: SetFollowing;
+  getChatList: GetChatList;
+  getChatMessages: GetChatMessages;
+  sendChatMessage: SendChatMessage;
 };
 
 export function createServerDataSources(
@@ -51,6 +62,11 @@ export function createServerDataSources(
     },
     follow: {
       setFollowing: dependencies.setFollowing,
+    },
+    chat: {
+      list: dependencies.getChatList,
+      messages: dependencies.getChatMessages,
+      sendMessage: dependencies.sendChatMessage,
     },
     storage: {
       createUploadUrl: dependencies.createUploadUrl,
@@ -74,6 +90,46 @@ export const serverDataSources = createServerDataSources({
     return {
       targetUserId: String(result.targetUserId),
       followState: result.followState,
+    };
+  },
+  getChatList: async () => {
+    const result = await apiTrpcClient.chat.list.query();
+    return result.map((item) => ({
+      id: String(item.userId),
+      name: item.userName,
+      imageUri: item.imageUrl ?? undefined,
+      lastMessage: item.lastMessage,
+      hasUnread: item.hasUnread,
+    }));
+  },
+  getChatMessages: async (input) => {
+    const result = await apiTrpcClient.chat.messages.query({
+      targetUserId: Number(input.targetUserId),
+      limit: input.limit,
+    });
+    return {
+      targetUser: {
+        id: String(result.targetUser.id),
+        name: result.targetUser.name,
+      },
+      messages: result.messages.map((message) => ({
+        id: String(message.id),
+        senderId: message.isMine ? "me" : String(message.senderUserId),
+        text: message.body,
+        createdAt: message.createdAt,
+      })),
+    };
+  },
+  sendChatMessage: async (input) => {
+    const result = await apiTrpcClient.chat.sendMessage.mutate({
+      targetUserId: Number(input.targetUserId),
+      body: input.body,
+    });
+    return {
+      id: String(result.message.id),
+      senderId: result.message.isMine ? "me" : String(result.message.senderUserId),
+      text: result.message.body,
+      createdAt: result.message.createdAt,
     };
   },
 });

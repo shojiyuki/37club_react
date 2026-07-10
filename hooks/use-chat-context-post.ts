@@ -9,12 +9,14 @@ import {
 type UseChatContextPostOptions = {
   userId?: string;
   userName?: string;
+  imageUri?: string;
   postId?: string;
 };
 
 export function useChatContextPost({
   userId,
   userName: userNameParam,
+  imageUri,
   postId,
 }: UseChatContextPostOptions) {
   const userName = useMemo(() => {
@@ -23,6 +25,19 @@ export function useChatContextPost({
   }, [userId, userNameParam]);
 
   const contextPost = useMemo<MockPost | undefined>(() => {
+    if (imageUri) {
+      return {
+        id: postId ?? `chat-context-${userId ?? "unknown"}`,
+        user: {
+          id: userId ?? "",
+          name: userName,
+          followState: "mutual",
+        },
+        imageUri,
+        caption: "",
+        topicId: "",
+      };
+    }
     if (postId) {
       return MOCK_POSTS.find((post) => post.id === postId);
     }
@@ -30,7 +45,7 @@ export function useChatContextPost({
       return MOCK_POSTS.find((post) => post.user.id === userId);
     }
     return undefined;
-  }, [postId, userId]);
+  }, [imageUri, postId, userId, userName]);
 
   return {
     userName,

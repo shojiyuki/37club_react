@@ -80,6 +80,61 @@ export const follows = mysqlTable(
 export type Follow = typeof follows.$inferSelect;
 export type InsertFollow = typeof follows.$inferInsert;
 
+export const chatRooms = mysqlTable("chatRooms", {
+  id: int("id").autoincrement().primaryKey(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ChatRoom = typeof chatRooms.$inferSelect;
+export type InsertChatRoom = typeof chatRooms.$inferInsert;
+
+export const chatRoomMembers = mysqlTable(
+  "chatRoomMembers",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    chatRoomId: int("chatRoomId")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("chat_room_members_room_user_unique").on(table.chatRoomId, table.userId),
+    index("chat_room_members_room_id_idx").on(table.chatRoomId),
+    index("chat_room_members_user_id_idx").on(table.userId),
+  ],
+);
+
+export type ChatRoomMember = typeof chatRoomMembers.$inferSelect;
+export type InsertChatRoomMember = typeof chatRoomMembers.$inferInsert;
+
+export const messages = mysqlTable(
+  "messages",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    chatRoomId: int("chatRoomId")
+      .notNull()
+      .references(() => chatRooms.id, { onDelete: "cascade" }),
+    senderUserId: int("senderUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [
+    index("messages_room_created_at_idx").on(table.chatRoomId, table.createdAt),
+    index("messages_sender_user_id_idx").on(table.senderUserId),
+  ],
+);
+
+export type Message = typeof messages.$inferSelect;
+export type InsertMessage = typeof messages.$inferInsert;
+
 export const topics = mysqlTable(
   "topics",
   {

@@ -120,10 +120,10 @@ export default function ChatListScreen() {
   const { isDemo, demoPostedAt, activeTopicStartAt } = useAppMode();
   const { chatUsers } = useChatList();
 
-  function handleUserPress(userId: string, userName: string) {
+  function handleUserPress(userId: string, userName: string, imageUri?: string) {
     router.push({
       pathname: "/chat/[userId]",
-      params: { userId, userName },
+      params: { userId, userName, imageUri },
     });
   }
 
@@ -159,7 +159,7 @@ export default function ChatListScreen() {
                 imageUri={item.imageUri}
                 lastMessage={item.lastMessage}
                 hasUnread={item.hasUnread}
-                onPress={() => handleUserPress(item.id, item.name)}
+                onPress={() => handleUserPress(item.id, item.name, item.imageUri)}
               />
             );
           }}
