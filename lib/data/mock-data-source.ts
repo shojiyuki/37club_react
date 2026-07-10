@@ -5,6 +5,7 @@ import type {
   CreateUploadUrlInput,
   CurrentParticipation,
   DataSources,
+  SetFollowingInput,
 } from "./types";
 import { MOCK_POSTS } from "../mock-data";
 
@@ -147,6 +148,14 @@ export const mockDataSources: DataSources = {
     },
     async getMyPost() {
       return MOCK_MY_POST;
+    },
+  },
+  follow: {
+    async setFollowing(input: SetFollowingInput) {
+      return {
+        targetUserId: input.targetUserId,
+        followState: input.following ? "following" : "none",
+      };
     },
   },
   storage: {

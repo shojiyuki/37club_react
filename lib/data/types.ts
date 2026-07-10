@@ -8,6 +8,14 @@ type RouterOutputs = inferRouterOutputs<AppRouter>;
 export type CurrentParticipation = RouterOutputs["participation"]["current"];
 export type CheckInParticipationInput = RouterInputs["participation"]["checkIn"];
 export type CreateUploadUrlResponse = RouterOutputs["storage"]["createUploadUrl"];
+export type SetFollowingInput = {
+  targetUserId: string;
+  following: boolean;
+};
+export type SetFollowingResponse = {
+  targetUserId: string;
+  followState: AppFollowState;
+};
 
 export type CreateUploadUrlInput = {
   contentType: "image/jpeg" | "image/png";
@@ -58,6 +66,9 @@ export interface DataSources {
   posts: {
     getAll(): Promise<AppPost[]>;
     getMyPost(): Promise<AppMyPost>;
+  };
+  follow: {
+    setFollowing(input: SetFollowingInput): Promise<SetFollowingResponse>;
   };
   storage: {
     createUploadUrl(input: CreateUploadUrlInput): Promise<CreateUploadUrlResponse>;

@@ -34,11 +34,8 @@ import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useFollow } from "@/hooks/use-follow";
 import { usePosts } from "@/hooks/use-posts";
 import { useAppMode } from "@/lib/app-mode-context";
-import type {
-  MockPost,
-  ChatMessage,
-  FollowState,
-} from "@/lib/mock-data";
+import type { AppPost, AppFollowState } from "@/lib/data/types";
+import type { ChatMessage } from "@/lib/mock-data";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -83,7 +80,7 @@ function FollowButton({
   state,
   onPress,
 }: {
-  state: FollowState;
+  state: AppFollowState;
   onPress: () => void;
 }) {
   if (state === "none") {
@@ -135,10 +132,10 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 // ─── Bottom Sheet ─────────────────────────────────────────────────────────────
 
 interface BottomSheetProps {
-  post: MockPost | null;
+  post: AppPost | null;
   visible: boolean;
   onClose: () => void;
-  onFollowChange: (userId: string, next: FollowState) => void;
+  onFollowChange: (userId: string, next: AppFollowState) => void | Promise<void>;
 }
 
 function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheetProps) {
@@ -201,7 +198,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
     if (!post) return;
     const { followState, id } = post.user;
     if (followState === "mutual") { expandToChat(); return; }
-    const next: FollowState = followState === "none" ? "following" : "none";
+    const next: AppFollowState = followState === "none" ? "following" : "none";
     onFollowChange(id, next);
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
@@ -361,9 +358,9 @@ function PostCell({
   followState,
   onPress,
 }: {
-  item: MockPost;
+  item: AppPost;
   index: number;
-  followState: FollowState;
+  followState: AppFollowState;
   onPress: () => void;
 }) {
   const col = index % NUM_COLS;
@@ -565,7 +562,7 @@ export default function PostsScreen() {
   const { posts } = usePosts();
   const { followingPosts, getFollowState, updateFollowState } = useFollow(posts);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
-  const [selectedPost, setSelectedPost] = useState<MockPost | null>(null);
+  const [selectedPost, setSelectedPost] = useState<AppPost | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const tabScrollRef = useRef<ScrollView>(null);
@@ -597,9 +594,9 @@ export default function PostsScreen() {
     if (newTab !== activeTab) setActiveTab(newTab);
   }
 
-  function handlePostPress(post: MockPost) {
+  function handlePostPress(post: AppPost) {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const merged: MockPost = {
+    const merged: AppPost = {
       ...post,
       user: { ...post.user, followState: getFollowState(post) },
     };
@@ -607,17 +604,35 @@ export default function PostsScreen() {
     setSheetVisible(true);
   }
 
-  function handleFollowChange(userId: string, next: FollowState) {
-    updateFollowState(userId, next);
+  async function handleFollowChange(userId: string, next: AppFollowState) {
+    const previousState =
+      selectedPost?.user.id === userId ? selectedPost.user.followState : undefined;
     setSelectedPost((prev) =>
       prev && prev.user.id === userId
         ? { ...prev, user: { ...prev.user, followState: next } }
         : prev
     );
+    try {
+      const resolvedState = await updateFollowState(userId, next);
+      setSelectedPost((prev) =>
+        prev && prev.user.id === userId
+          ? { ...prev, user: { ...prev.user, followState: resolvedState } }
+          : prev
+      );
+    } catch (error) {
+      console.error("[posts] follow update failed", error);
+      if (previousState) {
+        setSelectedPost((prev) =>
+          prev && prev.user.id === userId
+            ? { ...prev, user: { ...prev.user, followState: previousState } }
+            : prev
+        );
+      }
+    }
   }
 
   const renderItem = useCallback(
-    ({ item, index }: { item: MockPost; index: number }) => (
+    ({ item, index }: { item: AppPost; index: number }) => (
       <PostCell
         item={item}
         index={index}

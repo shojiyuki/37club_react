@@ -31,6 +31,11 @@ vi.mock("../lib/trpc", () => ({
         query: vi.fn(),
       },
     },
+    follow: {
+      setFollowing: {
+        mutate: vi.fn(),
+      },
+    },
   },
 }));
 
@@ -43,6 +48,7 @@ import type {
   CheckInParticipationInput,
   CreateUploadUrlResponse,
   CurrentParticipation,
+  SetFollowingResponse,
 } from "../lib/data/types";
 
 function createCurrentParticipation(): CurrentParticipation {
@@ -65,6 +71,10 @@ function createPostDependencies() {
       postedAt: "",
       topicLabel: "",
     } satisfies AppMyPost),
+    setFollowing: vi.fn().mockResolvedValue({
+      targetUserId: "2",
+      followState: "following",
+    } satisfies SetFollowingResponse),
   };
 }
 
@@ -129,6 +139,7 @@ describe("participation data sources", () => {
       createUploadUrl: vi.fn(),
       getPosts: vi.fn(),
       getMyPost: vi.fn(),
+      setFollowing: vi.fn(),
     });
 
     await expect(sources.topics.getAll()).resolves.toBe(topics);
@@ -287,6 +298,7 @@ describe("participation data sources", () => {
       getTopics: vi.fn(),
       getPosts,
       getMyPost: vi.fn(),
+      setFollowing: vi.fn(),
     });
 
     await expect(sources.posts.getAll()).resolves.toBe(posts);
@@ -310,9 +322,33 @@ describe("participation data sources", () => {
       getTopics: vi.fn(),
       getPosts: vi.fn(),
       getMyPost,
+      setFollowing: vi.fn(),
     });
 
     await expect(sources.posts.getMyPost()).resolves.toBe(myPost);
     expect(getMyPost).toHaveBeenCalledOnce();
+  });
+
+  it("delegates follow updates to the server client", async () => {
+    const current = createCurrentParticipation();
+    const response: SetFollowingResponse = {
+      targetUserId: "2",
+      followState: "following",
+    };
+    const setFollowing = vi.fn().mockResolvedValue(response);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+      getTopics: vi.fn(),
+      getPosts: vi.fn(),
+      getMyPost: vi.fn(),
+      setFollowing,
+    });
+    const input = { targetUserId: "2", following: true };
+
+    await expect(sources.follow.setFollowing(input)).resolves.toBe(response);
+    expect(setFollowing).toHaveBeenCalledWith(input);
   });
 });
