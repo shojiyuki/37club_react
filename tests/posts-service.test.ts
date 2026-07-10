@@ -123,6 +123,7 @@ describe("PostsService", () => {
           id: "2",
           name: "hana",
           followState: "none",
+          isMine: false,
         },
         imageUri: "https://example.test/users/1/posts/photo.png",
         caption: "赤いもの",
@@ -150,6 +151,7 @@ describe("PostsService", () => {
     const result = await service.listCurrentTopicPosts(1);
 
     expect(result[0]?.user.followState).toBe("following");
+    expect(result[0]?.user.isMine).toBe(false);
   });
 
   it("returns mutual when viewer and post author follow each other", async () => {
@@ -169,6 +171,7 @@ describe("PostsService", () => {
     const result = await service.listCurrentTopicPosts(1);
 
     expect(result[0]?.user.followState).toBe("mutual");
+    expect(result[0]?.user.isMine).toBe(false);
   });
 
   it("returns none for viewer's own post without checking follow relations", async () => {
@@ -181,6 +184,7 @@ describe("PostsService", () => {
     const result = await service.listCurrentTopicPosts(1);
 
     expect(result[0]?.user.followState).toBe("none");
+    expect(result[0]?.user.isMine).toBe(true);
     expect(followRepository.isFollowing).not.toHaveBeenCalled();
   });
 

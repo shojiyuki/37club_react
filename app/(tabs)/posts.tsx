@@ -167,6 +167,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
   }));
 
   const isMutual = post?.user.followState === "mutual";
+  const isMine = post?.user.isMine === true;
 
   function expandToChat() {
     if (!isMutual || isChatMode.value) return;
@@ -185,7 +186,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
   const panGesture = Gesture.Pan()
     .runOnJS(true)
     .onEnd((e) => {
-      if (e.translationY < -50 && !isChatMode.value && isMutual) {
+      if (e.translationY < -50 && !isChatMode.value && isMutual && !isMine) {
         expandToChat();
       } else if (e.translationY > 80 && isChatMode.value) {
         collapseToDetail();
@@ -196,6 +197,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
 
   function handleFollowPress() {
     if (!post) return;
+    if (post.user.isMine) return;
     const { followState, id } = post.user;
     if (followState === "mutual") { expandToChat(); return; }
     const next: AppFollowState = followState === "none" ? "following" : "none";
@@ -317,7 +319,9 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
               <View style={[styles.userRow, { width: imageSize }]}>
                 <Text style={styles.sheetUserName} numberOfLines={1}>@{post.user.name}</Text>
                 <View style={styles.userRowActions}>
-                  <FollowButton state={post.user.followState} onPress={handleFollowPress} />
+            {!post.user.isMine && (
+              <FollowButton state={post.user.followState} onPress={handleFollowPress} />
+            )}
                   <Pressable
                     style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.6 }]}
                     onPress={handleMorePress}

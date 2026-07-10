@@ -282,7 +282,7 @@ describe("participation data sources", () => {
     const posts: AppPost[] = [
       {
         id: "1",
-        user: { id: "1", name: "test", followState: "none" },
+        user: { id: "1", name: "test", followState: "none", isMine: true },
         imageUri: "https://example.test/image.jpg",
         caption: "caption",
         topicId: "1",

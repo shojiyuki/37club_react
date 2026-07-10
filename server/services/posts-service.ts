@@ -14,6 +14,7 @@ export type PostListItemResponse = {
     id: string;
     name: string;
     followState: "none" | "following" | "mutual";
+    isMine: boolean;
   };
   imageUri: string;
   caption: string;
@@ -64,6 +65,7 @@ export class PostsService {
         id: String(record.user.id),
         name: record.user.name ?? `user_${record.user.id}`,
         followState: await this.getFollowState(viewerUserId, record.user.id),
+        isMine: viewerUserId === record.user.id,
       },
       imageUri,
       caption: record.post.caption,

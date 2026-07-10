@@ -30,6 +30,7 @@ export type AppPost = {
     id: string;
     name: string;
     followState: AppFollowState;
+    isMine?: boolean;
   };
   imageUri: string;
   caption: string;
