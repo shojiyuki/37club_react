@@ -57,6 +57,29 @@ export const authAccounts = mysqlTable(
 export type AuthAccount = typeof authAccounts.$inferSelect;
 export type InsertAuthAccount = typeof authAccounts.$inferInsert;
 
+export const follows = mysqlTable(
+  "follows",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    followerUserId: int("followerUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    followingUserId: int("followingUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("follows_follower_following_unique").on(table.followerUserId, table.followingUserId),
+    index("follows_follower_user_id_idx").on(table.followerUserId),
+    index("follows_following_user_id_idx").on(table.followingUserId),
+  ],
+);
+
+export type Follow = typeof follows.$inferSelect;
+export type InsertFollow = typeof follows.$inferInsert;
+
 export const topics = mysqlTable(
   "topics",
   {
