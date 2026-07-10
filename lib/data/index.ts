@@ -9,6 +9,8 @@ export type {
   CreateUploadUrlResponse,
   CurrentParticipation,
   DataSources,
+  DiscardUploadInput,
+  DiscardUploadResponse,
 } from "./types";
 
 export const dataSources: DataSources =

@@ -67,7 +67,7 @@ async function getCurrentCheckInLocation() {
 export default function PreviewScreen() {
   const insets = useSafeAreaInsets();
   const { checkIn, isCheckingIn } = useParticipation();
-  const { createUploadUrl, isCreatingUploadUrl } = useStorageUploadTarget();
+  const { createUploadUrl, discardUpload, isCreatingUploadUrl } = useStorageUploadTarget();
   const params = useLocalSearchParams<{
     uri?: string;
     topicId?: string;
@@ -116,6 +116,7 @@ export default function PreviewScreen() {
   async function handlePost() {
     if (isCreatingUploadUrl || isCheckingIn) return;
     setPostError(null);
+    let uploadedImageStorageKey: string | null = null;
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -132,6 +133,7 @@ export default function PreviewScreen() {
         uploadUrl: uploadTarget.uploadUrl,
         image,
       });
+      uploadedImageStorageKey = uploadTarget.imageStorageKey;
       const location = await getCurrentCheckInLocation();
       await checkIn({
         topicId,
@@ -145,6 +147,13 @@ export default function PreviewScreen() {
       });
     } catch (error) {
       console.error("[check-in preview] failed", error);
+      if (uploadedImageStorageKey) {
+        try {
+          await discardUpload({ imageStorageKey: uploadedImageStorageKey });
+        } catch (discardError) {
+          console.warn("[check-in preview] discard upload failed", discardError);
+        }
+      }
       setPostError("CHECK INに失敗しました。もう一度お試しください。");
     }
   }

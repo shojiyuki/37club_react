@@ -4,12 +4,30 @@ import {
   ALLOWED_IMAGE_CONTENT_TYPES,
   MAX_UPLOAD_IMAGE_BYTES,
   StorageService,
+  StorageServiceError,
 } from "../services/storage-service";
+import { DrizzleParticipationRepository } from "../repositories/participation-repository";
 import { S3Storage } from "../storage/s3-storage";
 import { protectedProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
 
 function createStorageService(): StorageService {
-  return new StorageService(new S3Storage());
+  return new StorageService(
+    new S3Storage(),
+    undefined,
+    undefined,
+    new DrizzleParticipationRepository(),
+  );
+}
+
+function toTrpcError(error: unknown): never {
+  if (error instanceof StorageServiceError) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: error.code,
+    });
+  }
+  throw error;
 }
 
 export const storageRouter = router({
@@ -27,4 +45,20 @@ export const storageRouter = router({
         contentLength: input.contentLength,
       }),
     ),
+  discardUpload: protectedProcedure
+    .input(
+      z.object({
+        imageStorageKey: z.string().min(1).max(1024),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        return await createStorageService().discardUpload({
+          userId: ctx.user.id,
+          imageStorageKey: input.imageStorageKey,
+        });
+      } catch (error) {
+        return toTrpcError(error);
+      }
+    }),
 });

@@ -13,6 +13,8 @@ import type {
   CreateUploadUrlResponse,
   CurrentParticipation,
   DataSources,
+  DiscardUploadInput,
+  DiscardUploadResponse,
   SendChatMessageInput,
   SetFollowingInput,
   SetFollowingResponse,
@@ -22,6 +24,7 @@ type GetCurrentParticipation = () => Promise<CurrentParticipation>;
 type CheckInParticipation = (input: CheckInParticipationInput) => Promise<CurrentParticipation>;
 type CheckOutParticipation = () => Promise<CurrentParticipation>;
 type CreateUploadUrl = (input: CreateUploadUrlInput) => Promise<CreateUploadUrlResponse>;
+type DiscardUpload = (input: DiscardUploadInput) => Promise<DiscardUploadResponse>;
 type GetPosts = () => Promise<AppPost[]>;
 type GetMyPost = () => Promise<AppMyPost>;
 type GetTopics = () => Promise<AppTopic[]>;
@@ -36,6 +39,7 @@ type ServerDataSourceDependencies = {
   checkInParticipation: CheckInParticipation;
   checkOutParticipation: CheckOutParticipation;
   createUploadUrl: CreateUploadUrl;
+  discardUpload?: DiscardUpload;
   getPosts: GetPosts;
   getMyPost: GetMyPost;
   setFollowing: SetFollowing;
@@ -70,6 +74,7 @@ export function createServerDataSources(
     },
     storage: {
       createUploadUrl: dependencies.createUploadUrl,
+      discardUpload: dependencies.discardUpload ?? (async () => ({ discarded: true })),
     },
   };
 }
@@ -80,6 +85,7 @@ export const serverDataSources = createServerDataSources({
   checkInParticipation: (input) => apiTrpcClient.participation.checkIn.mutate(input),
   checkOutParticipation: () => apiTrpcClient.participation.checkOut.mutate(),
   createUploadUrl: (input) => apiTrpcClient.storage.createUploadUrl.mutate(input),
+  discardUpload: (input) => apiTrpcClient.storage.discardUpload.mutate(input),
   getPosts: () => apiTrpcClient.posts.listCurrentTopic.query(),
   getMyPost: () => apiTrpcClient.posts.myCurrent.query(),
   setFollowing: async (input) => {

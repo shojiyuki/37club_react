@@ -17,6 +17,9 @@ vi.mock("../lib/trpc", () => ({
       createUploadUrl: {
         mutate: vi.fn(),
       },
+      discardUpload: {
+        mutate: vi.fn(),
+      },
     },
     posts: {
       listCurrentTopic: {
@@ -289,6 +292,31 @@ describe("participation data sources", () => {
 
     await expect(sources.storage.createUploadUrl(input)).resolves.toBe(uploadTarget);
     expect(createUploadUrl).toHaveBeenCalledWith(input);
+  });
+
+  it("returns a mock discard upload response", async () => {
+    await expect(
+      mockDataSources.storage.discardUpload({
+        imageStorageKey: "mock/users/1/posts/mock-upload.png",
+      }),
+    ).resolves.toEqual({ discarded: true });
+  });
+
+  it("delegates upload discard to the server client", async () => {
+    const current = createCurrentParticipation();
+    const discardUpload = vi.fn().mockResolvedValue({ discarded: true });
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi.fn().mockResolvedValue(current),
+      checkInParticipation: vi.fn().mockResolvedValue(current),
+      checkOutParticipation: vi.fn().mockResolvedValue(current),
+      createUploadUrl: vi.fn(),
+      discardUpload,
+      ...createPostDependencies(),
+    });
+    const input = { imageStorageKey: "users/1/posts/orphan.png" };
+
+    await expect(sources.storage.discardUpload(input)).resolves.toEqual({ discarded: true });
+    expect(discardUpload).toHaveBeenCalledWith(input);
   });
 
   it("returns mock posts from the mock source", async () => {

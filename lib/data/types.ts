@@ -8,6 +8,7 @@ type RouterOutputs = inferRouterOutputs<AppRouter>;
 export type CurrentParticipation = RouterOutputs["participation"]["current"];
 export type CheckInParticipationInput = RouterInputs["participation"]["checkIn"];
 export type CreateUploadUrlResponse = RouterOutputs["storage"]["createUploadUrl"];
+export type DiscardUploadResponse = RouterOutputs["storage"]["discardUpload"];
 export type SetFollowingInput = {
   targetUserId: string;
   following: boolean;
@@ -53,6 +54,10 @@ export type SendChatMessageInput = {
 export type CreateUploadUrlInput = {
   contentType: "image/jpeg" | "image/png";
   contentLength: number;
+};
+
+export type DiscardUploadInput = {
+  imageStorageKey: string;
 };
 
 export type AppFollowState = "none" | "following" | "mutual";
@@ -110,5 +115,6 @@ export interface DataSources {
   };
   storage: {
     createUploadUrl(input: CreateUploadUrlInput): Promise<CreateUploadUrlResponse>;
+    discardUpload(input: DiscardUploadInput): Promise<DiscardUploadResponse>;
   };
 }

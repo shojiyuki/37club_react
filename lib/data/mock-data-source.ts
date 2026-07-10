@@ -223,5 +223,8 @@ export const mockDataSources: DataSources = {
         expiresAt: new Date(now.getTime() + 5 * 60 * 1000).toISOString(),
       };
     },
+    async discardUpload() {
+      return { discarded: true };
+    },
   },
 };
