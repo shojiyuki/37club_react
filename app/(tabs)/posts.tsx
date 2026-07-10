@@ -2,9 +2,6 @@ import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useRef, useState } from "react";
 import {
-  ActionSheetIOS,
-  Alert,
-  type AlertButton,
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
@@ -146,6 +143,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
   const isChatMode = useSharedValue(false);
   const [chatModeState, setChatModeState] = useState(false);
   const [inputText, setInputText] = useState("");
+  const [moreMenuVisible, setMoreMenuVisible] = useState(false);
   const { messages, sendMessage, resetMessages } = useChatMessages(post?.user.id);
   const flatListRef = useRef<FlatList>(null);
 
@@ -154,6 +152,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
       isChatMode.value = false;
       setChatModeState(false);
       setInputText("");
+      setMoreMenuVisible(false);
       resetMessages();
       translateY.value = withTiming(0, { duration: 350, easing: Easing.out(Easing.cubic) });
       sheetHeight.value = withTiming(SHEET_70, { duration: 350, easing: Easing.out(Easing.cubic) });
@@ -207,50 +206,14 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
   }
 
   function handleMorePress() {
-    const canUnfollow = !!post && isMutual && !isMine;
-    const unfollowLabel = "フォロー解除";
-    const reportLabel = "通報する";
-    const cancelLabel = "キャンセル";
-    const handleUnfollow = () => {
-      if (!post) return;
-      onFollowChange(post.user.id, "none");
-      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    };
+    setMoreMenuVisible(true);
+  }
 
-    if (Platform.OS === "web") {
-      if (canUnfollow && window.confirm("フォロー解除しますか？")) {
-        handleUnfollow();
-      }
-      return;
-    }
-
-    if (Platform.OS === "ios") {
-      const options = canUnfollow
-        ? [unfollowLabel, reportLabel, cancelLabel]
-        : [reportLabel, cancelLabel];
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: options.length - 1,
-          destructiveButtonIndex: canUnfollow ? 1 : 0,
-        },
-        (idx) => {
-          if (canUnfollow && idx === 0) {
-            handleUnfollow();
-            return;
-          }
-          const reportIndex = canUnfollow ? 1 : 0;
-          if (idx === reportIndex) Alert.alert("通報しました", "ご報告ありがとうございます。");
-        }
-      );
-    } else {
-      const actions: AlertButton[] = [
-        ...(canUnfollow ? [{ text: unfollowLabel, onPress: handleUnfollow }] : []),
-        { text: reportLabel, style: "destructive" as const, onPress: () => Alert.alert("通報しました") },
-        { text: cancelLabel, style: "cancel" },
-      ];
-      Alert.alert("操作を選択", "", actions);
-    }
+  function handleUnfollowFromMenu() {
+    if (!post) return;
+    setMoreMenuVisible(false);
+    onFollowChange(post.user.id, "none");
+    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
   function handleSend() {
@@ -384,6 +347,30 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
           )}
         </Animated.View>
       </GestureDetector>
+
+      {moreMenuVisible && (
+        <View style={styles.moreMenuLayer}>
+          <Pressable style={styles.moreMenuBackdrop} onPress={() => setMoreMenuVisible(false)} />
+          <View style={[styles.moreMenuPanel, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+            {isMutual && !isMine ? (
+              <Pressable
+                style={({ pressed }) => [styles.moreMenuItem, pressed && styles.moreMenuItemPressed]}
+                onPress={handleUnfollowFromMenu}
+              >
+                <Text style={[styles.moreMenuItemText, styles.moreMenuDestructiveText]}>
+                  フォロー解除
+                </Text>
+              </Pressable>
+            ) : null}
+            <Pressable
+              style={({ pressed }) => [styles.moreMenuItem, pressed && styles.moreMenuItemPressed]}
+              onPress={() => setMoreMenuVisible(false)}
+            >
+              <Text style={[styles.moreMenuItemText, styles.moreMenuCancelText]}>キャンセル</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </Modal>
   );
 }
@@ -969,6 +956,49 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 18,
     fontWeight: "700",
+  },
+  moreMenuLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+  },
+  moreMenuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  moreMenuPanel: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: COLORS.surface2,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.neon,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  moreMenuItem: {
+    minHeight: 52,
+    justifyContent: "center",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.divider,
+  },
+  moreMenuItemPressed: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  moreMenuItemText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  moreMenuDestructiveText: {
+    color: "#FF7D9A",
+  },
+  moreMenuCancelText: {
+    color: COLORS.textSecondary,
   },
   divider: {
     height: 1,
