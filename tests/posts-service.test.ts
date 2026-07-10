@@ -5,6 +5,7 @@ import type {
   MyCurrentPostRecord,
   PostsRepository,
 } from "../server/repositories/posts-repository";
+import type { FollowRepository } from "../server/repositories/follow-repository";
 import { PostsService } from "../server/services/posts-service";
 import type { Storage } from "../server/storage/storage";
 
@@ -28,7 +29,23 @@ function createStorage(): Storage {
   };
 }
 
-function createPostRecord(): CurrentTopicPostRecord {
+function createFollowRepository(overrides: Partial<FollowRepository> = {}): FollowRepository {
+  return {
+    userExists: vi.fn(),
+    isFollowing: vi.fn().mockResolvedValue(false),
+    follow: vi.fn(),
+    unfollow: vi.fn(),
+    ...overrides,
+  };
+}
+
+function createPostRecord(
+  overrides: {
+    post?: Partial<CurrentTopicPostRecord["post"]>;
+    user?: Partial<CurrentTopicPostRecord["user"]>;
+    topic?: Partial<CurrentTopicPostRecord["topic"]>;
+  } = {},
+): CurrentTopicPostRecord {
   return {
     post: {
       id: 11,
@@ -38,6 +55,7 @@ function createPostRecord(): CurrentTopicPostRecord {
       caption: "赤いもの",
       createdAt: NOW,
       updatedAt: NOW,
+      ...overrides.post,
     },
     user: {
       id: 1,
@@ -49,6 +67,7 @@ function createPostRecord(): CurrentTopicPostRecord {
       createdAt: NOW,
       updatedAt: NOW,
       lastSignedIn: NOW,
+      ...overrides.user,
     },
     topic: {
       id: 1,
@@ -60,6 +79,7 @@ function createPostRecord(): CurrentTopicPostRecord {
       prompt: "赤いもの",
       createdAt: NOW,
       updatedAt: NOW,
+      ...overrides.topic,
     },
   };
 }
@@ -84,12 +104,15 @@ function createMyPostRecord(): MyCurrentPostRecord {
 }
 
 describe("PostsService", () => {
-  it("returns current topic posts with signed read URLs", async () => {
+  it("returns current topic posts with signed read URLs and none follow state", async () => {
     const repository = createRepository({
-      findCurrentTopicPosts: vi.fn().mockResolvedValue([createPostRecord()]),
+      findCurrentTopicPosts: vi.fn().mockResolvedValue([
+        createPostRecord({ user: { id: 2, name: "hana" } }),
+      ]),
     });
     const storage = createStorage();
-    const service = new PostsService(repository, storage);
+    const followRepository = createFollowRepository();
+    const service = new PostsService(repository, storage, followRepository);
 
     const result = await service.listCurrentTopicPosts(1);
 
@@ -97,8 +120,8 @@ describe("PostsService", () => {
       {
         id: "11",
         user: {
-          id: "1",
-          name: "shoji",
+          id: "2",
+          name: "hana",
           followState: "none",
         },
         imageUri: "https://example.test/users/1/posts/photo.png",
@@ -107,6 +130,58 @@ describe("PostsService", () => {
       },
     ]);
     expect(storage.createReadUrl).toHaveBeenCalledWith("users/1/posts/photo.png");
+    expect(followRepository.isFollowing).toHaveBeenCalledWith(1, 2);
+  });
+
+  it("returns following when viewer follows the post author", async () => {
+    const repository = createRepository({
+      findCurrentTopicPosts: vi.fn().mockResolvedValue([
+        createPostRecord({ user: { id: 2, name: "hana" } }),
+      ]),
+    });
+    const service = new PostsService(
+      repository,
+      createStorage(),
+      createFollowRepository({
+        isFollowing: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
+      }),
+    );
+
+    const result = await service.listCurrentTopicPosts(1);
+
+    expect(result[0]?.user.followState).toBe("following");
+  });
+
+  it("returns mutual when viewer and post author follow each other", async () => {
+    const repository = createRepository({
+      findCurrentTopicPosts: vi.fn().mockResolvedValue([
+        createPostRecord({ user: { id: 2, name: "hana" } }),
+      ]),
+    });
+    const service = new PostsService(
+      repository,
+      createStorage(),
+      createFollowRepository({
+        isFollowing: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(true),
+      }),
+    );
+
+    const result = await service.listCurrentTopicPosts(1);
+
+    expect(result[0]?.user.followState).toBe("mutual");
+  });
+
+  it("returns none for viewer's own post without checking follow relations", async () => {
+    const repository = createRepository({
+      findCurrentTopicPosts: vi.fn().mockResolvedValue([createPostRecord()]),
+    });
+    const followRepository = createFollowRepository();
+    const service = new PostsService(repository, createStorage(), followRepository);
+
+    const result = await service.listCurrentTopicPosts(1);
+
+    expect(result[0]?.user.followState).toBe("none");
+    expect(followRepository.isFollowing).not.toHaveBeenCalled();
   });
 
   it("returns my active post with topic label and signed read URL", async () => {

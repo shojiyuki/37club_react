@@ -1,10 +1,15 @@
 import { DrizzlePostsRepository } from "../repositories/posts-repository";
+import { DrizzleFollowRepository } from "../repositories/follow-repository";
 import { PostsService } from "../services/posts-service";
 import { S3Storage } from "../storage/s3-storage";
 import { protectedProcedure, router } from "../_core/trpc";
 
 function createPostsService(): PostsService {
-  return new PostsService(new DrizzlePostsRepository(), new S3Storage());
+  return new PostsService(
+    new DrizzlePostsRepository(),
+    new S3Storage(),
+    new DrizzleFollowRepository(),
+  );
 }
 
 export const postsRouter = router({
