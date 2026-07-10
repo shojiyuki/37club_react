@@ -4,6 +4,7 @@ import React, { useCallback, useRef, useState } from "react";
 import {
   ActionSheetIOS,
   Alert,
+  type AlertButton,
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
@@ -206,16 +207,49 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
   }
 
   function handleMorePress() {
+    const canUnfollow = !!post && isMutual && !isMine;
+    const unfollowLabel = "フォロー解除";
+    const reportLabel = "通報する";
+    const cancelLabel = "キャンセル";
+    const handleUnfollow = () => {
+      if (!post) return;
+      onFollowChange(post.user.id, "none");
+      if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    };
+
+    if (Platform.OS === "web") {
+      if (canUnfollow && window.confirm("フォロー解除しますか？")) {
+        handleUnfollow();
+      }
+      return;
+    }
+
     if (Platform.OS === "ios") {
+      const options = canUnfollow
+        ? [unfollowLabel, reportLabel, cancelLabel]
+        : [reportLabel, cancelLabel];
       ActionSheetIOS.showActionSheetWithOptions(
-        { options: ["通報する", "キャンセル"], cancelButtonIndex: 1, destructiveButtonIndex: 0 },
-        (idx) => { if (idx === 0) Alert.alert("通報しました", "ご報告ありがとうございます。"); }
+        {
+          options,
+          cancelButtonIndex: options.length - 1,
+          destructiveButtonIndex: canUnfollow ? 1 : 0,
+        },
+        (idx) => {
+          if (canUnfollow && idx === 0) {
+            handleUnfollow();
+            return;
+          }
+          const reportIndex = canUnfollow ? 1 : 0;
+          if (idx === reportIndex) Alert.alert("通報しました", "ご報告ありがとうございます。");
+        }
       );
     } else {
-      Alert.alert("操作を選択", "", [
-        { text: "通報する", style: "destructive", onPress: () => Alert.alert("通報しました") },
-        { text: "キャンセル", style: "cancel" },
-      ]);
+      const actions: AlertButton[] = [
+        ...(canUnfollow ? [{ text: unfollowLabel, onPress: handleUnfollow }] : []),
+        { text: reportLabel, style: "destructive" as const, onPress: () => Alert.alert("通報しました") },
+        { text: cancelLabel, style: "cancel" },
+      ];
+      Alert.alert("操作を選択", "", actions);
     }
   }
 
@@ -319,9 +353,9 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
               <View style={[styles.userRow, { width: imageSize }]}>
                 <Text style={styles.sheetUserName} numberOfLines={1}>@{post.user.name}</Text>
                 <View style={styles.userRowActions}>
-            {!post.user.isMine && (
-              <FollowButton state={post.user.followState} onPress={handleFollowPress} />
-            )}
+                  {!post.user.isMine && (
+                    <FollowButton state={post.user.followState} onPress={handleFollowPress} />
+                  )}
                   <Pressable
                     style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.6 }]}
                     onPress={handleMorePress}
