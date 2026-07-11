@@ -1,10 +1,6 @@
 import { useMemo } from "react";
 
-import {
-  MOCK_POSTS,
-  MOCK_USERS,
-  type MockPost,
-} from "@/lib/mock-data";
+import type { AppPost } from "@/lib/data/types";
 
 type UseChatContextPostOptions = {
   userId?: string;
@@ -20,11 +16,10 @@ export function useChatContextPost({
   postId,
 }: UseChatContextPostOptions) {
   const userName = useMemo(() => {
-    const user = userId ? MOCK_USERS.find((u) => u.id === userId) : undefined;
-    return userNameParam ?? user?.name ?? "ユーザー";
-  }, [userId, userNameParam]);
+    return userNameParam ?? "ユーザー";
+  }, [userNameParam]);
 
-  const contextPost = useMemo<MockPost | undefined>(() => {
+  const contextPost = useMemo<AppPost | undefined>(() => {
     if (imageUri) {
       return {
         id: postId ?? `chat-context-${userId ?? "unknown"}`,
@@ -37,12 +32,6 @@ export function useChatContextPost({
         caption: "",
         topicId: "",
       };
-    }
-    if (postId) {
-      return MOCK_POSTS.find((post) => post.id === postId);
-    }
-    if (userId) {
-      return MOCK_POSTS.find((post) => post.user.id === userId);
     }
     return undefined;
   }, [imageUri, postId, userId, userName]);
