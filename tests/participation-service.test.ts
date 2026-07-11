@@ -15,9 +15,11 @@ const now = new Date("2026-07-08T12:00:00.000Z");
 function createRepository(): ParticipationRepository {
   return {
     findActiveByUserId: vi.fn(),
+    findByUserIdAndTopicId: vi.fn(),
     findTopicById: vi.fn(),
     findPostByImageStorageKey: vi.fn(),
     createActiveParticipation: vi.fn(),
+    reactivateParticipation: vi.fn(),
     markExpired: vi.fn(),
     markCheckedOut: vi.fn(),
   };
@@ -233,6 +235,80 @@ describe("ParticipationService", () => {
       imageStorageKey: "users/1/posts/photo.jpg",
       caption: "sample",
     });
+  });
+
+  it("reactivates an existing checked-out participation and replaces the image", async () => {
+    const repository = createRepository();
+    const storage = createStorage();
+    const existingRecord = createRecord({
+      participation: {
+        ...createRecord().participation,
+        status: "checked_out",
+        checkedOutAt: new Date("2026-07-08T11:45:00.000Z"),
+      },
+      post: {
+        ...createRecord().post,
+        imageStorageKey: "users/1/posts/old-photo.jpg",
+        caption: "old",
+      },
+    });
+    const reactivatedRecord = createRecord({
+      participation: {
+        ...existingRecord.participation,
+        status: "active",
+        checkedInAt: now,
+        checkedOutAt: null,
+      },
+      post: {
+        ...existingRecord.post,
+        imageStorageKey: "users/1/posts/new-photo.jpg",
+        caption: "new",
+      },
+    });
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
+    vi.mocked(repository.findTopicById).mockResolvedValue(existingRecord.topic);
+    vi.mocked(repository.findPostByImageStorageKey).mockResolvedValue(undefined);
+    vi.mocked(repository.findByUserIdAndTopicId).mockResolvedValue(existingRecord);
+    vi.mocked(repository.reactivateParticipation).mockResolvedValue(reactivatedRecord);
+    vi.mocked(storage.getObjectMetadata).mockResolvedValue({
+      key: "users/1/posts/new-photo.jpg",
+      contentType: "image/jpeg",
+      contentLength: 1024,
+    });
+    const service = new ParticipationService(repository, () => now, storage);
+
+    await expect(
+      service.checkIn(1, {
+        topicId: 20,
+        imageStorageKey: "users/1/posts/new-photo.jpg",
+        caption: "new",
+        location: {
+          latitude: existingRecord.topic.latitude,
+          longitude: existingRecord.topic.longitude,
+          accuracy: 20,
+        },
+      }),
+    ).resolves.toMatchObject({
+      participation: {
+        id: 10,
+        status: "active",
+        checkedInAt: "2026-07-08T12:00:00.000Z",
+        checkedOutAt: null,
+      },
+      post: {
+        imageStorageKey: "users/1/posts/new-photo.jpg",
+        caption: "new",
+      },
+    });
+    expect(repository.createActiveParticipation).not.toHaveBeenCalled();
+    expect(repository.reactivateParticipation).toHaveBeenCalledWith({
+      participationId: 10,
+      postId: 30,
+      imageStorageKey: "users/1/posts/new-photo.jpg",
+      caption: "new",
+      checkedInAt: now,
+    });
+    expect(storage.deleteObject).toHaveBeenCalledWith("users/1/posts/old-photo.jpg");
   });
 
   it("rejects check-in when the image key does not belong to the user prefix", async () => {

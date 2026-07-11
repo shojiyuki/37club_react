@@ -153,6 +153,24 @@ export class ParticipationService {
       throw new ParticipationServiceError("IMAGE_ALREADY_USED");
     }
 
+    const existingParticipation = await this.repository.findByUserIdAndTopicId(userId, input.topicId);
+    if (existingParticipation) {
+      const oldImageStorageKey = existingParticipation.post.imageStorageKey;
+      const record = await this.repository.reactivateParticipation({
+        participationId: existingParticipation.participation.id,
+        postId: existingParticipation.post.id,
+        imageStorageKey: input.imageStorageKey,
+        caption: input.caption,
+        checkedInAt: now,
+      });
+
+      if (oldImageStorageKey !== input.imageStorageKey) {
+        await this.deleteOldImageBestEffort(oldImageStorageKey);
+      }
+
+      return this.toCurrentResponse(record, now);
+    }
+
     const record = await this.repository.createActiveParticipation({
       userId,
       topicId: input.topicId,
@@ -161,6 +179,18 @@ export class ParticipationService {
     });
 
     return this.toCurrentResponse(record, now);
+  }
+
+  private async deleteOldImageBestEffort(imageStorageKey: string): Promise<void> {
+    if (!this.storage) {
+      return;
+    }
+
+    try {
+      await this.storage.deleteObject(imageStorageKey);
+    } catch (error) {
+      console.warn("[participation] failed to delete replaced image", error);
+    }
   }
 
   private async validateImage(userId: number, imageStorageKey: string): Promise<void> {

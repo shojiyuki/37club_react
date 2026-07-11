@@ -10,6 +10,7 @@ export type ActiveParticipationRecord = {
 
 export interface ParticipationRepository {
   findActiveByUserId(userId: number): Promise<ActiveParticipationRecord | undefined>;
+  findByUserIdAndTopicId(userId: number, topicId: number): Promise<ActiveParticipationRecord | undefined>;
   findTopicById(topicId: number): Promise<typeof topics.$inferSelect | undefined>;
   findPostByImageStorageKey(imageStorageKey: string): Promise<typeof posts.$inferSelect | undefined>;
   createActiveParticipation(input: {
@@ -17,6 +18,13 @@ export interface ParticipationRepository {
     topicId: number;
     imageStorageKey: string;
     caption: string;
+  }): Promise<ActiveParticipationRecord>;
+  reactivateParticipation(input: {
+    participationId: number;
+    postId: number;
+    imageStorageKey: string;
+    caption: string;
+    checkedInAt: Date;
   }): Promise<ActiveParticipationRecord>;
   markExpired(participationId: number): Promise<void>;
   markCheckedOut(participationId: number, checkedOutAt: Date): Promise<void>;
@@ -37,6 +45,28 @@ export class DrizzleParticipationRepository implements ParticipationRepository {
       .innerJoin(topics, eq(participations.topicId, topics.id))
       .innerJoin(posts, eq(participations.postId, posts.id))
       .where(and(eq(participations.userId, userId), eq(participations.status, "active")))
+      .limit(1);
+
+    return result[0];
+  }
+
+  async findByUserIdAndTopicId(
+    userId: number,
+    topicId: number,
+  ): Promise<ActiveParticipationRecord | undefined> {
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    const result = await db
+      .select({
+        participation: participations,
+        topic: topics,
+        post: posts,
+      })
+      .from(participations)
+      .innerJoin(topics, eq(participations.topicId, topics.id))
+      .innerJoin(posts, eq(participations.postId, posts.id))
+      .where(and(eq(participations.userId, userId), eq(participations.topicId, topicId)))
       .limit(1);
 
     return result[0];
@@ -124,6 +154,57 @@ export class DrizzleParticipationRepository implements ParticipationRepository {
 
       if (!record) {
         throw new Error("Failed to read created participation");
+      }
+
+      return record;
+    });
+  }
+
+  async reactivateParticipation(input: {
+    participationId: number;
+    postId: number;
+    imageStorageKey: string;
+    caption: string;
+    checkedInAt: Date;
+  }): Promise<ActiveParticipationRecord> {
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    return db.transaction(async (tx) => {
+      await tx
+        .update(posts)
+        .set({
+          imageStorageKey: input.imageStorageKey,
+          caption: input.caption,
+          updatedAt: input.checkedInAt,
+        })
+        .where(eq(posts.id, input.postId));
+
+      await tx
+        .update(participations)
+        .set({
+          status: "active",
+          checkedInAt: input.checkedInAt,
+          checkedOutAt: null,
+          updatedAt: input.checkedInAt,
+        })
+        .where(eq(participations.id, input.participationId));
+
+      const result = await tx
+        .select({
+          participation: participations,
+          topic: topics,
+          post: posts,
+        })
+        .from(participations)
+        .innerJoin(topics, eq(participations.topicId, topics.id))
+        .innerJoin(posts, eq(participations.postId, posts.id))
+        .where(eq(participations.id, input.participationId))
+        .limit(1);
+      const record = result[0];
+
+      if (!record) {
+        throw new Error("Failed to read reactivated participation");
       }
 
       return record;
