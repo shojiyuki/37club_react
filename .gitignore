@@ -63,6 +63,7 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.local
+!.env.mock
 !.env.development
 !.env.production
 

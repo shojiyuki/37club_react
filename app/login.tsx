@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -10,14 +10,34 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { runtimeConfig } from "@/constants/runtime-config";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { signIn, loading } = useAuth();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isApiMode = runtimeConfig.dataSource === "api";
+
+  console.log("[login] runtime-config", {
+    appEnv: runtimeConfig.appEnv,
+    dataSource: runtimeConfig.dataSource,
+    apiBaseUrl: runtimeConfig.apiBaseUrl,
+    isApiMode,
+  });
+
+  useEffect(() => {
+    if (!isApiMode) {
+      router.replace("/");
+    }
+  }, [isApiMode]);
 
   async function handleSignIn() {
+    if (!isApiMode) {
+      router.replace("/");
+      return;
+    }
+
     setErrorMessage(null);
     try {
       await signIn();
@@ -25,6 +45,10 @@ export default function LoginScreen() {
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Sign in failed");
     }
+  }
+
+  if (!isApiMode) {
+    return null;
   }
 
   return (

@@ -2,10 +2,10 @@ const fs = require("fs");
 const path = require("path");
 
 const envName = process.argv[2];
-const allowed = new Set(["local", "development", "production"]);
+const allowed = new Set(["mock", "local", "development", "production"]);
 
 if (!allowed.has(envName)) {
-  console.error("Usage: node scripts/sync-env.js <local|development|production>");
+  console.error("Usage: node scripts/sync-env.js <mock|local|development|production>");
   process.exit(1);
 }
 

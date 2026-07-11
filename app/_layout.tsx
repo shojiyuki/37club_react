@@ -6,7 +6,14 @@ import * as WebBrowser from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import "@/lib/_core/nativewind-pressable";
 import { ThemeProvider } from "@/lib/theme-provider";
 import {
@@ -18,7 +25,10 @@ import {
 import type { EdgeInsets, Metrics, Rect } from "react-native-safe-area-context";
 
 import { trpc, createTRPCClient } from "@/lib/trpc";
-import { initManusRuntime, subscribeSafeAreaInsets } from "@/lib/_core/manus-runtime";
+import {
+  initManusRuntime,
+  subscribeSafeAreaInsets,
+} from "@/lib/_core/manus-runtime";
 import { AppModeProvider, useAppMode } from "@/lib/app-mode-context";
 import { runtimeConfig } from "@/constants/runtime-config";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -35,9 +45,14 @@ export const unstable_settings = {
 function AppNavigator() {
   const segments = useSegments();
   const { user, loading } = useAuth();
-  const { isParticipationLoading, participationError, refreshParticipation } = useAppMode();
+  const { isParticipationLoading, participationError, refreshParticipation } =
+    useAppMode();
   const authRequired = runtimeConfig.dataSource === "api";
   const isPublicAuthRoute = segments[0] === "login" || segments[0] === "oauth";
+
+  if (!authRequired && isPublicAuthRoute) {
+    return <Redirect href="/" />;
+  }
 
   if (authRequired && (loading || (user && isParticipationLoading))) {
     return (
@@ -50,8 +65,13 @@ function AppNavigator() {
   if (authRequired && user && participationError) {
     return (
       <View style={styles.authLoading}>
-        <Text style={styles.participationError}>参加状態を取得できませんでした</Text>
-        <Pressable style={styles.retryButton} onPress={() => void refreshParticipation()}>
+        <Text style={styles.participationError}>
+          参加状態を取得できませんでした
+        </Text>
+        <Pressable
+          style={styles.retryButton}
+          onPress={() => void refreshParticipation()}
+        >
           <Text style={styles.retryButtonText}>再試行</Text>
         </Pressable>
       </View>
@@ -71,7 +91,10 @@ function AppNavigator() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="login" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="check-in" options={{ presentation: "fullScreenModal" }} />
+        <Stack.Screen
+          name="check-in"
+          options={{ presentation: "fullScreenModal" }}
+        />
         <Stack.Screen name="oauth/callback" />
       </Stack>
       <StatusBar style="light" />
@@ -120,7 +143,10 @@ export default function RootLayout() {
 
   // Ensure minimum 8px padding for top and bottom on mobile
   const providerInitialMetrics = useMemo(() => {
-    const metrics = initialWindowMetrics ?? { insets: initialInsets, frame: initialFrame };
+    const metrics = initialWindowMetrics ?? {
+      insets: initialInsets,
+      frame: initialFrame,
+    };
     return {
       ...metrics,
       insets: {
@@ -163,7 +189,9 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider>
-      <SafeAreaProvider initialMetrics={providerInitialMetrics}>{content}</SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={providerInitialMetrics}>
+        {content}
+      </SafeAreaProvider>
     </ThemeProvider>
   );
 }

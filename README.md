@@ -197,15 +197,18 @@ CHECK IN画像は非公開のAWS S3 development bucketへ保存します。local
 
 ## mock / API 切り替え
 
-開発時に mock データを見るか、API server を見るかは `.env` で切り替えます。
-`app.config.ts` が `.env` の `APP_ENV` を見て環境を解決し、`Constants.expoConfig.extra` に渡します。
+開発時に mock データを見るか、local API server を見るかは `.env` で切り替えます。
+`app.config.ts` が `.env` の `APP_ENV` / `DATA_SOURCE_*` を見て環境を解決し、`Constants.expoConfig.extra` に渡します。
 
 ```text
-.env.local
+.env.mock
   local mock 用
 
+.env.local
+  local API 用
+
 .env.development
-  local / development API 用
+  development API 用
 
 .env.production
   production API 用
@@ -221,6 +224,7 @@ app.config.ts
 起動:
 
 ```sh
+pnpm dev:mock
 pnpm dev:local
 pnpm dev:development
 pnpm dev:production
@@ -229,10 +233,17 @@ pnpm dev:production
 各コマンドは、起動前に対応する env ファイルを `.env` にコピーします。
 
 ```text
+pnpm dev:mock
+  .env.mock -> .env
+  APP_ENV=local
+  dataSource=mock
+  Expo Metro only
+
 pnpm dev:local
   .env.local -> .env
   APP_ENV=local
-  dataSource=mock
+  dataSource=api
+  server + Expo Metro
 
 pnpm dev:development
   .env.development -> .env
@@ -251,6 +262,21 @@ pnpm dev:production
 pnpm dev
 ```
 
+`pnpm dev` は現在の `.env` をそのまま使います。直前に `pnpm dev:mock` を実行していた場合、`.env` は mock のままです。local APIへ戻す場合は `pnpm dev:local` を使います。
+
+### 切り替え時のcache clear
+
+mock / local API を切り替えた直後、Expo Metro / web bundle のcacheにより、画面上の `dataSource` が前回のまま残ることがあります。
+
+その場合は一度 dev server を止めて、clear付き起動を使います。
+
+```sh
+pnpm dev:mock:clear
+pnpm dev:local:clear
+```
+
+`pnpm dev:mock` は通常起動でも `--clear` 付きのMetroを使います。local API側で古いmock bundleが残る場合は `pnpm dev:local:clear` を使ってください。ブラウザ側も必要に応じて hard reload します。
+
 data source の判定は `lib/data-source.ts` に集約しています。
 
 ```ts
@@ -262,7 +288,10 @@ isMockDataSource();
 
 ```sh
 pnpm dev          # server + Expo Metro
-pnpm dev:local    # copy .env.local, then dev
+pnpm dev:mock     # copy .env.mock, then Expo Metro with clear cache
+pnpm dev:mock:clear # same as dev:mock
+pnpm dev:local    # copy .env.local, then server + Expo Metro
+pnpm dev:local:clear # copy .env.local, then server + Expo Metro with clear cache
 pnpm dev:development # copy .env.development, then dev
 pnpm dev:production  # copy .env.production, then dev
 pnpm dev:server   # server only

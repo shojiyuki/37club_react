@@ -26,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeader } from "@/components/LiveTimerHeader";
 import { useParticipation } from "@/hooks/use-participation";
 import { useStorageUploadTarget } from "@/hooks/use-storage-upload";
+import { isMockDataSource } from "@/lib/data-source";
 import { loadUploadableImage, uploadImageToUrl } from "@/lib/storage/upload-image";
 
 const COLORS = {
@@ -82,6 +83,7 @@ export default function PreviewScreen() {
 
   const [caption, setCaption] = useState("");
   const [postError, setPostError] = useState<string | null>(null);
+  const isMockMode = isMockDataSource();
 
   // Breathing glow for CHECK IN button
   const glowOpacity = useSharedValue(0.35);
@@ -123,6 +125,23 @@ export default function PreviewScreen() {
     try {
       if (!topicId || !Number.isFinite(topicId)) {
         throw new Error("Topic ID is missing");
+      }
+      if (isMockMode) {
+        await checkIn({
+          topicId,
+          imageStorageKey: `mock/users/me/posts/${Date.now()}.png`,
+          caption,
+          location: {
+            latitude: 35.6595,
+            longitude: 139.7005,
+            accuracy: 10,
+          },
+        });
+        router.push({
+          pathname: "/check-in/posting" as any,
+          params: { startAt, remainingMs: String(remainingMs) },
+        });
+        return;
       }
       const image = await loadUploadableImage(uri);
       const uploadTarget = await createUploadUrl({
