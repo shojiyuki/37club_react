@@ -13,7 +13,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
@@ -27,6 +26,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChatBubble, ChatContextHeader, ChatInputBar, ChatMessageList } from "@/components/chat";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useChatMessages, type ChatMessage } from "@/hooks/use-chat-messages";
 import { useFollow } from "@/hooks/use-follow";
@@ -69,7 +69,6 @@ const SHEET_100 = SCREEN_HEIGHT * 0.96;
 const LIVE_REMAINING_MS = 4 * 60 * 1000 + 52 * 1000;
 // Start time for ticking timer (mock: 37min - LIVE_REMAINING_MS ago)
 const MOCK_START_AT = new Date(Date.now() - (37 * 60 * 1000 - LIVE_REMAINING_MS)).toISOString();
-const ME = "me";
 
 // ─── Follow button ────────────────────────────────────────────────────────────
 
@@ -108,21 +107,6 @@ function FollowButton({
     >
       <Text style={[styles.followBtnText, { color: COLORS.bg }]}>Chat</Text>
     </Pressable>
-  );
-}
-
-// ─── Chat Bubble (minimal) ────────────────────────────────────────────────────
-
-function ChatBubble({ message }: { message: ChatMessage }) {
-  const isMe = message.senderId === ME;
-  return (
-    <View style={[styles.bubbleRow, isMe ? styles.bubbleRowMe : styles.bubbleRowThem]}>
-      <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-        <Text style={[styles.bubbleText, isMe ? styles.bubbleTextMe : styles.bubbleTextThem]}>
-          {message.text}
-        </Text>
-      </View>
-    </View>
   );
 }
 
@@ -260,49 +244,32 @@ function PostBottomSheet({
               keyboardVerticalOffset={0}
             >
               <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
-              <View style={styles.chatContextHeader}>
-                <Image source={{ uri: post.imageUri }} style={styles.chatThumb} contentFit="cover" />
-                <Text style={styles.chatContextName} numberOfLines={1}>@{post.user.name}</Text>
-                <Pressable
-                  style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
-                  onPress={onClose}
-                >
-                  <Text style={styles.closeBtnText}>✕</Text>
-                </Pressable>
-              </View>
-              <View style={styles.chatContextDivider} />
-              <FlatList
+              <ChatContextHeader
+                userName={post.user.name}
+                imageUri={post.imageUri}
+                trailing={
+                  <Pressable
+                    style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
+                    onPress={onClose}
+                  >
+                    <Text style={styles.closeBtnText}>✕</Text>
+                  </Pressable>
+                }
+              />
+              <ChatMessageList
                 ref={flatListRef}
-                data={messages}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => <ChatBubble message={item} />}
+                messages={messages}
+                compact
                 contentContainerStyle={styles.messageList}
-                showsVerticalScrollIndicator={false}
                 onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
               />
-              <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="メッセージを入力..."
-                  placeholderTextColor={COLORS.textMuted}
-                  value={inputText}
-                  onChangeText={setInputText}
-                  returnKeyType="send"
-                  onSubmitEditing={handleSend}
-                  multiline={false}
-                />
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.sendButton,
-                    !inputText.trim() && styles.sendButtonDisabled,
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={handleSend}
-                  disabled={!inputText.trim()}
-                >
-                  <Text style={styles.sendButtonText}>↑</Text>
-                </Pressable>
-              </View>
+              <ChatInputBar
+                value={inputText}
+                onChangeText={setInputText}
+                onSend={handleSend}
+                bottomInset={Math.max(insets.bottom, 16)}
+                compact
+              />
             </KeyboardAvoidingView>
           ) : (
             /* ── 70% DETAIL MODE ── */
@@ -344,7 +311,7 @@ function PostBottomSheet({
                   <Text style={styles.chatPreviewLabel}>Chat Preview</Text>
                   <View style={styles.chatPreviewBubbles}>
                     {previewMessages.map((msg) => (
-                      <ChatBubble key={msg.id} message={msg} />
+                      <ChatBubble key={msg.id} message={msg} compact />
                     ))}
                   </View>
                 </View>
@@ -1040,31 +1007,6 @@ const styles = StyleSheet.create({
   },
 
   // ── 100% Chat mode ──
-  chatContextHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: COLORS.surface,
-    gap: 12,
-  },
-  chatContextDivider: {
-    height: 0.5,
-    backgroundColor: COLORS.divider,
-  },
-  chatThumb: {
-    width: 48,
-    height: 48,
-    borderRadius: 6,
-    backgroundColor: COLORS.surface2,
-  },
-  chatContextName: {
-    flex: 1,
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
   closeBtn: {
     width: 32,
     height: 32,
@@ -1080,73 +1022,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     gap: 6,
-  },
-  bubbleRow: {
-    flexDirection: "row",
-    marginVertical: 2,
-  },
-  bubbleRowMe: { justifyContent: "flex-end" },
-  bubbleRowThem: { justifyContent: "flex-start" },
-  bubble: {
-    maxWidth: "72%",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 16,
-    backgroundColor: COLORS.surface2,
-  },
-  bubbleMe: {
-    backgroundColor: COLORS.neonBubble,
-    borderBottomRightRadius: 4,
-    borderWidth: 1,
-    borderColor: COLORS.neonBubbleBorder,
-  },
-  bubbleThem: {
-    backgroundColor: COLORS.surface2,
-    borderBottomLeftRadius: 4,
-  },
-  bubbleText: { fontSize: 14, lineHeight: 20 },
-  bubbleTextMe: { color: COLORS.white },
-  bubbleTextThem: { color: COLORS.textSecondary },
-  inputBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    gap: 10,
-    borderTopWidth: 0.5,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.surface,
-  },
-  textInput: {
-    flex: 1,
-    height: 40,
-    backgroundColor: COLORS.surface2,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    color: COLORS.white,
-    fontSize: 15,
-  },
-  sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.neon,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: COLORS.neon,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  sendButtonDisabled: {
-    backgroundColor: COLORS.border,
-    shadowOpacity: 0,
-  },
-  sendButtonText: {
-    color: COLORS.bg,
-    fontSize: 16,
-    fontWeight: "700",
-    lineHeight: 20,
   },
 });
