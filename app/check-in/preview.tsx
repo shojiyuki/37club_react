@@ -23,7 +23,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LiveTimerHeader } from "@/components/LiveTimerHeader";
+import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useParticipation } from "@/hooks/use-participation";
 import { useStorageUploadTarget } from "@/hooks/use-storage-upload";
 import { isMockDataSource } from "@/lib/data-source";
@@ -184,7 +184,7 @@ export default function PreviewScreen() {
       keyboardVerticalOffset={0}
     >
       {/* LIVE Timer */}
-      <LiveTimerHeader remainingMs={remainingMs} />
+      <LiveTimerHeaderTicking startAt={startAt} />
 
       <View style={styles.body}>
         {/* Square image preview with neon border */}

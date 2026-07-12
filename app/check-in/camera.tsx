@@ -20,7 +20,7 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Path, Polyline, Line } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LiveTimerHeader } from "@/components/LiveTimerHeader";
+import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 
 const COLORS = {
   bg: "#070812",
@@ -201,7 +201,7 @@ export default function CameraScreen() {
   if (!permission.granted) {
     return (
       <View style={[styles.screen, styles.permissionContainer]}>
-        <LiveTimerHeader remainingMs={remainingMs} />
+        <LiveTimerHeaderTicking startAt={startAt} />
         <View style={styles.permissionBody}>
           <Text style={styles.permissionText}>
             カメラへのアクセスを許可してください
@@ -296,7 +296,7 @@ export default function CameraScreen() {
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
       {/* LIVE Timer */}
-      <LiveTimerHeader remainingMs={remainingMs} />
+      <LiveTimerHeaderTicking startAt={startAt} />
 
       {/* Cancel button */}
       <View style={styles.topBar}>

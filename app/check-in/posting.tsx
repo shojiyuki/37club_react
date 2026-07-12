@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LiveTimerHeader } from "@/components/LiveTimerHeader";
+import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 
 const COLORS = {
   bg: "#070812",
@@ -23,6 +23,9 @@ export default function PostingScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ startAt?: string; remainingMs?: string }>();
   const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000;
+  const startAt =
+    params.startAt ??
+    new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
 
   // Rotation animation
   const rotation = useSharedValue(0);
@@ -43,7 +46,7 @@ export default function PostingScreen() {
       router.replace({
         pathname: "/check-in/posted" as any,
         params: {
-          startAt: params.startAt,
+          startAt,
           remainingMs: String(remainingMs),
         },
       });
@@ -54,7 +57,7 @@ export default function PostingScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <LiveTimerHeader remainingMs={remainingMs} />
+      <LiveTimerHeaderTicking startAt={startAt} />
 
       <View style={styles.center}>
         {/* Glow behind ring */}

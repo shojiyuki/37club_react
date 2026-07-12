@@ -27,7 +27,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LiveTimerHeader, LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
+import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useChatMessages, type ChatMessage } from "@/hooks/use-chat-messages";
 import { useFollow } from "@/hooks/use-follow";
 import { usePosts } from "@/hooks/use-posts";
@@ -131,11 +131,18 @@ function ChatBubble({ message }: { message: ChatMessage }) {
 interface BottomSheetProps {
   post: AppPost | null;
   visible: boolean;
+  activeTopicStartAt: string | null;
   onClose: () => void;
   onFollowChange: (userId: string, next: AppFollowState) => void | Promise<void>;
 }
 
-function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheetProps) {
+function PostBottomSheet({
+  post,
+  visible,
+  activeTopicStartAt,
+  onClose,
+  onFollowChange,
+}: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(SHEET_70);
   const sheetHeight = useSharedValue(SHEET_70);
@@ -252,7 +259,7 @@ function PostBottomSheet({ post, visible, onClose, onFollowChange }: BottomSheet
               behavior={Platform.OS === "ios" ? "padding" : "height"}
               keyboardVerticalOffset={0}
             >
-              <LiveTimerHeader remainingMs={LIVE_REMAINING_MS} />
+              <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
               <View style={styles.chatContextHeader}>
                 <Image source={{ uri: post.imageUri }} style={styles.chatThumb} contentFit="cover" />
                 <Text style={styles.chatContextName} numberOfLines={1}>@{post.user.name}</Text>
@@ -729,6 +736,7 @@ export default function PostsScreen() {
       <PostBottomSheet
         post={selectedPost}
         visible={sheetVisible}
+        activeTopicStartAt={activeTopicStartAt}
         onClose={() => setSheetVisible(false)}
         onFollowChange={handleFollowChange}
       />
