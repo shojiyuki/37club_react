@@ -1,6 +1,6 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "../../shared/const.js";
 import type { Express, Request, Response } from "express";
-import { getUserByOpenId, upsertUser } from "../db";
+import { getUserByOpenId, upsertUser } from "../repositories/user-repository";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 
