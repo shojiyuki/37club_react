@@ -1,10 +1,11 @@
 import { and, eq } from "drizzle-orm";
 
-import { follows, users } from "../../drizzle/schema";
+import { follows, participations, users } from "../../drizzle/schema";
 import { getDb } from "../db";
 
 export interface FollowRepository {
   userExists(userId: number): Promise<boolean>;
+  areActiveInSameTopic(userAId: number, userBId: number): Promise<boolean>;
   isFollowing(followerUserId: number, followingUserId: number): Promise<boolean>;
   follow(followerUserId: number, followingUserId: number): Promise<void>;
   unfollow(followerUserId: number, followingUserId: number): Promise<void>;
@@ -16,6 +17,30 @@ export class DrizzleFollowRepository implements FollowRepository {
     if (!db) throw new Error("Database is not available");
 
     const result = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
+    return result.length > 0;
+  }
+
+  async areActiveInSameTopic(userAId: number, userBId: number): Promise<boolean> {
+    const userATopicId = await this.findActiveTopicIdByUserId(userAId);
+    if (!userATopicId) {
+      return false;
+    }
+
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    const result = await db
+      .select({ id: participations.id })
+      .from(participations)
+      .where(
+        and(
+          eq(participations.userId, userBId),
+          eq(participations.topicId, userATopicId),
+          eq(participations.status, "active"),
+        ),
+      )
+      .limit(1);
+
     return result.length > 0;
   }
 
@@ -56,5 +81,18 @@ export class DrizzleFollowRepository implements FollowRepository {
           eq(follows.followingUserId, followingUserId),
         ),
       );
+  }
+
+  private async findActiveTopicIdByUserId(userId: number): Promise<number | undefined> {
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    const result = await db
+      .select({ topicId: participations.topicId })
+      .from(participations)
+      .where(and(eq(participations.userId, userId), eq(participations.status, "active")))
+      .limit(1);
+
+    return result[0]?.topicId;
   }
 }

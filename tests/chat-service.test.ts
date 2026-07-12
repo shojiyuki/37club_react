@@ -43,6 +43,7 @@ function createRepository(overrides: Partial<ChatRepository> = {}): ChatReposito
     findUserById: vi.fn().mockResolvedValue(createUser()),
     listMutualUsers: vi.fn().mockResolvedValue([]),
     areMutual: vi.fn().mockResolvedValue(true),
+    areActiveInSameTopic: vi.fn().mockResolvedValue(true),
     findLatestPostImageStorageKey: vi.fn().mockResolvedValue(null),
     findRoomIdForUsers: vi.fn().mockResolvedValue(undefined),
     createRoomForUsers: vi.fn().mockResolvedValue(5),
@@ -146,6 +147,26 @@ describe("ChatService", () => {
     await expect(service.messages(1, { targetUserId: 2 })).rejects.toEqual(
       new ChatServiceError("NOT_MUTUAL"),
     );
+  });
+
+  it("rejects chat access when users are not active in the same topic", async () => {
+    const service = new ChatService(
+      createRepository({ areActiveInSameTopic: vi.fn().mockResolvedValue(false) }),
+    );
+
+    await expect(service.messages(1, { targetUserId: 2 })).rejects.toEqual(
+      new ChatServiceError("NOT_ACTIVE_IN_SAME_TOPIC"),
+    );
+  });
+
+  it("rejects sending a message when users are not active in the same topic", async () => {
+    const repository = createRepository({ areActiveInSameTopic: vi.fn().mockResolvedValue(false) });
+    const service = new ChatService(repository);
+
+    await expect(service.sendMessage(1, { targetUserId: 2, body: "hello" })).rejects.toEqual(
+      new ChatServiceError("NOT_ACTIVE_IN_SAME_TOPIC"),
+    );
+    expect(repository.insertMessage).not.toHaveBeenCalled();
   });
 
   it("rejects empty messages", async () => {

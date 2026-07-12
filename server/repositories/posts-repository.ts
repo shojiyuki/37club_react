@@ -53,6 +53,13 @@ export class DrizzlePostsRepository implements PostsRepository {
       .from(posts)
       .innerJoin(users, eq(posts.userId, users.id))
       .innerJoin(topics, eq(posts.topicId, topics.id))
+      .innerJoin(
+        participations,
+        and(
+          eq(participations.postId, posts.id),
+          eq(participations.status, "active"),
+        ),
+      )
       .where(eq(posts.topicId, topicId));
   }
 

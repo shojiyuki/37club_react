@@ -5,6 +5,7 @@ import {
   chatRooms,
   follows,
   messages,
+  participations,
   posts,
   users,
 } from "../../drizzle/schema";
@@ -18,6 +19,7 @@ export interface ChatRepository {
   findUserById(userId: number): Promise<ChatUserRecord | undefined>;
   listMutualUsers(viewerUserId: number): Promise<ChatUserRecord[]>;
   areMutual(userAId: number, userBId: number): Promise<boolean>;
+  areActiveInSameTopic(userAId: number, userBId: number): Promise<boolean>;
   findLatestPostImageStorageKey(userId: number): Promise<string | null>;
   findRoomIdForUsers(userAId: number, userBId: number): Promise<number | undefined>;
   createRoomForUsers(userAId: number, userBId: number): Promise<number>;
@@ -47,6 +49,9 @@ export class DrizzleChatRepository implements ChatRepository {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
+    const viewerTopicId = await this.findActiveTopicIdByUserId(viewerUserId);
+    if (!viewerTopicId) return [];
+
     const followingRows = await db
       .select({ userId: follows.followingUserId })
       .from(follows)
@@ -58,6 +63,14 @@ export class DrizzleChatRepository implements ChatRepository {
       .select({ user: users })
       .from(follows)
       .innerJoin(users, eq(follows.followerUserId, users.id))
+      .innerJoin(
+        participations,
+        and(
+          eq(participations.userId, follows.followerUserId),
+          eq(participations.topicId, viewerTopicId),
+          eq(participations.status, "active"),
+        ),
+      )
       .where(
         and(
           eq(follows.followingUserId, viewerUserId),
@@ -86,6 +99,30 @@ export class DrizzleChatRepository implements ChatRepository {
       .limit(1);
 
     return bFollowsA.length > 0;
+  }
+
+  async areActiveInSameTopic(userAId: number, userBId: number): Promise<boolean> {
+    const userATopicId = await this.findActiveTopicIdByUserId(userAId);
+    if (!userATopicId) {
+      return false;
+    }
+
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    const result = await db
+      .select({ id: participations.id })
+      .from(participations)
+      .where(
+        and(
+          eq(participations.userId, userBId),
+          eq(participations.topicId, userATopicId),
+          eq(participations.status, "active"),
+        ),
+      )
+      .limit(1);
+
+    return result.length > 0;
   }
 
   async findLatestPostImageStorageKey(userId: number): Promise<string | null> {
@@ -172,5 +209,18 @@ export class DrizzleChatRepository implements ChatRepository {
     const inserted = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1);
     if (!inserted[0]) throw new Error("Inserted message not found");
     return inserted[0];
+  }
+
+  private async findActiveTopicIdByUserId(userId: number): Promise<number | undefined> {
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    const result = await db
+      .select({ topicId: participations.topicId })
+      .from(participations)
+      .where(and(eq(participations.userId, userId), eq(participations.status, "active")))
+      .limit(1);
+
+    return result[0]?.topicId;
   }
 }

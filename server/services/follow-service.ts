@@ -12,7 +12,10 @@ export type SetFollowingResponse = {
   followState: FollowState;
 };
 
-export type FollowServiceErrorCode = "CANNOT_FOLLOW_SELF" | "USER_NOT_FOUND";
+export type FollowServiceErrorCode =
+  | "CANNOT_FOLLOW_SELF"
+  | "USER_NOT_FOUND"
+  | "NOT_ACTIVE_IN_SAME_TOPIC";
 
 export class FollowServiceError extends Error {
   constructor(readonly code: FollowServiceErrorCode) {
@@ -33,6 +36,9 @@ export class FollowService {
     }
 
     if (input.following) {
+      if (!(await this.repository.areActiveInSameTopic(viewerUserId, input.targetUserId))) {
+        throw new FollowServiceError("NOT_ACTIVE_IN_SAME_TOPIC");
+      }
       await this.repository.follow(viewerUserId, input.targetUserId);
     } else {
       await this.repository.unfollow(viewerUserId, input.targetUserId);

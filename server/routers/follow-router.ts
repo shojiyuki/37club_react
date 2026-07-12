@@ -12,7 +12,7 @@ function createFollowService(): FollowService {
 function toTrpcError(error: unknown): never {
   if (error instanceof FollowServiceError) {
     throw new TRPCError({
-      code: "BAD_REQUEST",
+      code: error.code === "NOT_ACTIVE_IN_SAME_TOPIC" ? "FORBIDDEN" : "BAD_REQUEST",
       message: error.code,
     });
   }

@@ -13,7 +13,10 @@ function createChatService(): ChatService {
 function toTrpcError(error: unknown): never {
   if (error instanceof ChatServiceError) {
     throw new TRPCError({
-      code: error.code === "NOT_MUTUAL" ? "FORBIDDEN" : "BAD_REQUEST",
+      code:
+        error.code === "NOT_MUTUAL" || error.code === "NOT_ACTIVE_IN_SAME_TOPIC"
+          ? "FORBIDDEN"
+          : "BAD_REQUEST",
       message: error.code,
     });
   }

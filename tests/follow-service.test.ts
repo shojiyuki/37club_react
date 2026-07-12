@@ -6,6 +6,7 @@ import { FollowService, FollowServiceError } from "../server/services/follow-ser
 function createRepository(overrides: Partial<FollowRepository> = {}): FollowRepository {
   return {
     userExists: vi.fn().mockResolvedValue(true),
+    areActiveInSameTopic: vi.fn().mockResolvedValue(true),
     isFollowing: vi.fn().mockResolvedValue(false),
     follow: vi.fn().mockResolvedValue(undefined),
     unfollow: vi.fn().mockResolvedValue(undefined),
@@ -56,6 +57,22 @@ describe("FollowService", () => {
     expect(repository.follow).not.toHaveBeenCalled();
   });
 
+  it("allows unfollow even when the target is not active in the same topic", async () => {
+    const repository = createRepository({
+      areActiveInSameTopic: vi.fn().mockResolvedValue(false),
+      isFollowing: vi.fn().mockResolvedValueOnce(false),
+    });
+    const service = new FollowService(repository);
+
+    await expect(service.setFollowing(1, { targetUserId: 2, following: false })).resolves.toEqual({
+      targetUserId: 2,
+      followState: "none",
+    });
+
+    expect(repository.areActiveInSameTopic).not.toHaveBeenCalled();
+    expect(repository.unfollow).toHaveBeenCalledWith(1, 2);
+  });
+
   it("rejects following yourself", async () => {
     const service = new FollowService(createRepository());
 
@@ -70,5 +87,15 @@ describe("FollowService", () => {
     await expect(service.setFollowing(1, { targetUserId: 2, following: true })).rejects.toEqual(
       new FollowServiceError("USER_NOT_FOUND"),
     );
+  });
+
+  it("rejects follow when users are not active in the same topic", async () => {
+    const repository = createRepository({ areActiveInSameTopic: vi.fn().mockResolvedValue(false) });
+    const service = new FollowService(repository);
+
+    await expect(service.setFollowing(1, { targetUserId: 2, following: true })).rejects.toEqual(
+      new FollowServiceError("NOT_ACTIVE_IN_SAME_TOPIC"),
+    );
+    expect(repository.follow).not.toHaveBeenCalled();
   });
 });

@@ -32,6 +32,7 @@ function createStorage(): Storage {
 function createFollowRepository(overrides: Partial<FollowRepository> = {}): FollowRepository {
   return {
     userExists: vi.fn(),
+    areActiveInSameTopic: vi.fn().mockResolvedValue(true),
     isFollowing: vi.fn().mockResolvedValue(false),
     follow: vi.fn(),
     unfollow: vi.fn(),

@@ -42,6 +42,7 @@ export type ChatServiceErrorCode =
   | "CANNOT_CHAT_SELF"
   | "USER_NOT_FOUND"
   | "NOT_MUTUAL"
+  | "NOT_ACTIVE_IN_SAME_TOPIC"
   | "EMPTY_MESSAGE"
   | "MESSAGE_TOO_LONG";
 
@@ -126,6 +127,10 @@ export class ChatService {
 
     if (!(await this.repository.areMutual(viewerUserId, targetUserId))) {
       throw new ChatServiceError("NOT_MUTUAL");
+    }
+
+    if (!(await this.repository.areActiveInSameTopic(viewerUserId, targetUserId))) {
+      throw new ChatServiceError("NOT_ACTIVE_IN_SAME_TOPIC");
     }
 
     return targetUser;
