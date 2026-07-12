@@ -10,7 +10,7 @@ This guide covers server-side features including authentication, database, tRPC 
 |----------|-----------------|---------------------|----------|
 | Data stays on device only | No | No | Use `AsyncStorage` |
 | Data syncs across devices | Yes | Yes | Database + tRPC |
-| User accounts / login | Yes | Yes | Manus OAuth |
+| User accounts / login | Yes | Yes | Cognito access token |
 | AI-powered features | Yes | **Optional** | LLM Integration |
 | User uploads files | Yes | **Optional** | S3 Storage |
 | Server-side validation | Yes | **Optional** | tRPC procedures |
@@ -52,12 +52,12 @@ Only touch the files with "←" markers. Anything under `_core/` directories is 
 
 ### Overview
 
-The template uses **Manus OAuth** for user authentication. It works differently on native and web:
+The app uses **Cognito OAuth/OIDC** on the client and verifies Cognito access tokens on the API server.
 
 | Platform | Auth Method | Token Storage |
 |----------|-------------|---------------|
-| iOS/Android | Bearer token | expo-secure-store |
-| Web | HTTP-only cookie | Browser cookie |
+| iOS/Android | Cognito access token | expo-secure-store refresh token + memory access token |
+| Web | Cognito access token | AuthSession/browser storage + memory access token |
 
 ### Using the Auth Hook
 
@@ -89,7 +89,7 @@ The `user` object contains:
 ```tsx
 interface User {
   id: number;
-  openId: string;        // Manus OAuth ID
+  openId: string | null; // legacy nullable field; internal identity is resolved via auth_accounts
   name: string | null;
   email: string | null;
   loginMethod: string;
@@ -98,24 +98,14 @@ interface User {
 }
 ```
 
-### Login Flow (Native)
+### Login Flow
 
-1. User taps Login button
-2. `startOAuthLogin()` calls `Linking.openURL()` which opens Manus OAuth in the system browser
-3. User authenticates
-4. OAuth redirects to the app's deep link (`/oauth/callback`) with code/state params
-5. App opens the callback handler
-6. Callback exchanges code for session token
-7. Token stored in SecureStore
-8. User redirected to home
-
-### Login Flow (Web)
-
-1. User clicks Login button
-2. Browser redirects to Manus OAuth
-3. User authenticates
-4. Redirect back with session cookie
-5. Cookie automatically sent with requests
+1. User taps Sign In.
+2. `CognitoAuthClient` starts an Authorization Code + PKCE flow with Cognito.
+3. Cognito redirects back to the configured callback route.
+4. The client exchanges the code for tokens.
+5. tRPC requests send the Cognito access token as `Authorization: Bearer <token>`.
+6. The API verifies the token and resolves the internal `users.id` through `auth_accounts`.
 
 ### Protected Routes
 
@@ -577,22 +567,19 @@ Available environment variables:
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | MySQL/TiDB connection string |
-| `JWT_SECRET` | Session signing secret |
-| `VITE_APP_ID` | Manus OAuth app ID |
-| `OAUTH_SERVER_URL` | Manus OAuth backend URL |
-| `VITE_OAUTH_PORTAL_URL` | Manus login portal URL |
-| `OWNER_OPEN_ID` | Owner's Manus ID |
-| `OWNER_NAME` | Owner's display name |
+| `OWNER_OPEN_ID` | Optional legacy owner openId for local admin role assignment |
 | `BUILT_IN_FORGE_API_URL` | Manus API endpoint |
 | `BUILT_IN_FORGE_API_KEY` | Manus API key |
+| `COGNITO_ISSUER` | Cognito User Pool issuer |
+| `COGNITO_DOMAIN` | Cognito hosted UI domain |
+| `COGNITO_CLIENT_ID` | Cognito app client ID |
+| `COGNITO_SCOPES` | Cognito OAuth scopes |
 
 Expo runtime variables (prefixed with `EXPO_PUBLIC_`):
 
 | Variable | Description |
 |----------|-------------|
-| `EXPO_PUBLIC_APP_ID` | App ID for OAuth |
 | `EXPO_PUBLIC_API_BASE_URL` | API server URL |
-| `EXPO_PUBLIC_OAUTH_PORTAL_URL` | Login portal URL |
 
 ---
 
@@ -647,8 +634,8 @@ export const users = mysqlTable("users", {
    * Use this for relations between tables.
    */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  /** Legacy nullable provider identifier. New auth identities live in auth_accounts. */
+  openId: varchar("openId", { length: 64 }).unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
@@ -708,8 +695,6 @@ export async function getUserByOpenId(openId: string) {
 
 `server/routers.ts`
 ```ts
-import { COOKIE_NAME } from "../shared/const.js";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 
@@ -718,13 +703,6 @@ export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return {
-        success: true,
-      } as const;
-    }),
   }),
 
   // TODO: add feature routers here, e.g.
@@ -843,8 +821,8 @@ import { createTRPCReact } from "@trpc/react-query";
 import { httpBatchLink } from "@trpc/client";
 import superjson from "superjson";
 import type { AppRouter } from "@/server/routers";
-import { getApiBaseUrl } from "@/constants/oauth";
-import * as Auth from "@/lib/_core/auth";
+import { getApiBaseUrl } from "@/constants/api";
+import { cognitoAuthClient } from "@/lib/auth/cognito-auth-client";
 
 /**
  * tRPC React client for type-safe API calls.
@@ -867,15 +845,8 @@ export function createTRPCClient() {
         // tRPC v11: transformer MUST be inside httpBatchLink, not at root
         transformer: superjson,
         async headers() {
-          const token = await Auth.getSessionToken();
+          const token = await cognitoAuthClient.getValidAccessToken();
           return token ? { Authorization: `Bearer ${token}` } : {};
-        },
-        // Custom fetch to include credentials for cookie-based auth
-        fetch(url, options) {
-          return fetch(url, {
-            ...options,
-            credentials: "include",
-          });
         },
       }),
     ],
@@ -885,214 +856,23 @@ export function createTRPCClient() {
 
 `hooks/use-auth.ts`
 ```ts
-import * as Api from "@/lib/_core/api";
-import * as Auth from "@/lib/_core/auth";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Platform } from "react-native";
+import { useAuth } from "@/hooks/use-auth";
 
-type UseAuthOptions = {
-  autoFetch?: boolean;
-};
-
-export function useAuth(options?: UseAuthOptions) {
-  const { autoFetch = true } = options ?? {};
-  const [user, setUser] = useState<Auth.User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  const fetchUser = useCallback(async () => {
-    console.log("[useAuth] fetchUser called");
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Web platform: use cookie-based auth, fetch user from API
-      if (Platform.OS === "web") {
-        console.log("[useAuth] Web platform: fetching user from API...");
-        const apiUser = await Api.getMe();
-        console.log("[useAuth] API user response:", apiUser);
-
-        if (apiUser) {
-          const userInfo: Auth.User = {
-            id: apiUser.id,
-            openId: apiUser.openId,
-            name: apiUser.name,
-            email: apiUser.email,
-            loginMethod: apiUser.loginMethod,
-            lastSignedIn: new Date(apiUser.lastSignedIn),
-          };
-          setUser(userInfo);
-          // Cache user info in localStorage for faster subsequent loads
-          await Auth.setUserInfo(userInfo);
-          console.log("[useAuth] Web user set from API:", userInfo);
-        } else {
-          console.log("[useAuth] Web: No authenticated user from API");
-          setUser(null);
-          await Auth.clearUserInfo();
-        }
-        return;
-      }
-
-      // Native platform: use token-based auth
-      console.log("[useAuth] Native platform: checking for session token...");
-      const sessionToken = await Auth.getSessionToken();
-      console.log(
-        "[useAuth] Session token:",
-        sessionToken ? `present (${sessionToken.substring(0, 20)}...)` : "missing",
-      );
-      if (!sessionToken) {
-        console.log("[useAuth] No session token, setting user to null");
-        setUser(null);
-        return;
-      }
-
-      // Use cached user info for native (token validates the session)
-      const cachedUser = await Auth.getUserInfo();
-      console.log("[useAuth] Cached user:", cachedUser);
-      if (cachedUser) {
-        console.log("[useAuth] Using cached user info");
-        setUser(cachedUser);
-      } else {
-        console.log("[useAuth] No cached user, setting user to null");
-        setUser(null);
-      }
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error("Failed to fetch user");
-      console.error("[useAuth] fetchUser error:", error);
-      setError(error);
-      setUser(null);
-    } finally {
-      setLoading(false);
-      console.log("[useAuth] fetchUser completed, loading:", false);
-    }
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await Api.logout();
-    } catch (err) {
-      console.error("[Auth] Logout API call failed:", err);
-      // Continue with logout even if API call fails
-    } finally {
-      await Auth.removeSessionToken();
-      await Auth.clearUserInfo();
-      setUser(null);
-      setError(null);
-    }
-  }, []);
-
-  const isAuthenticated = useMemo(() => Boolean(user), [user]);
-
-  useEffect(() => {
-    console.log("[useAuth] useEffect triggered, autoFetch:", autoFetch, "platform:", Platform.OS);
-    if (autoFetch) {
-      if (Platform.OS === "web") {
-        // Web: fetch user from API directly (user will login manually if needed)
-        console.log("[useAuth] Web: fetching user from API...");
-        fetchUser();
-      } else {
-        // Native: check for cached user info first for faster initial load
-        Auth.getUserInfo().then((cachedUser) => {
-          console.log("[useAuth] Native cached user check:", cachedUser);
-          if (cachedUser) {
-            console.log("[useAuth] Native: setting cached user immediately");
-            setUser(cachedUser);
-            setLoading(false);
-          } else {
-            // No cached user, check session token
-            fetchUser();
-          }
-        });
-      }
-    } else {
-      console.log("[useAuth] autoFetch disabled, setting loading to false");
-      setLoading(false);
-    }
-  }, [autoFetch, fetchUser]);
-
-  useEffect(() => {
-    console.log("[useAuth] State updated:", {
-      hasUser: !!user,
-      loading,
-      isAuthenticated,
-      error: error?.message,
-    });
-  }, [user, loading, isAuthenticated, error]);
-
-  return {
-    user,
-    loading,
-    error,
-    isAuthenticated,
-    refresh: fetchUser,
-    logout,
-  };
+function LoginButton() {
+  const { user, loading, signIn, signOut } = useAuth();
+  // signIn/signOut delegate token handling to CognitoAuthClient.
+  // API identity is resolved server-side from the Bearer access token.
 }
 ```
 
-`tests/auth.logout.test.ts`
+`tests/request-authenticator.test.ts`
 ```ts
 import { describe, expect, it } from "vitest";
-import { appRouter } from "../server/routers";
-import { COOKIE_NAME } from "../shared/const";
-import type { TrpcContext } from "../server/_core/context";
+import { RequestAuthenticator } from "../server/auth/request-authenticator";
 
-type CookieCall = {
-  name: string;
-  options: Record<string, unknown>;
-};
-
-type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
-
-function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] } {
-  const clearedCookies: CookieCall[] = [];
-  
-  const user: AuthenticatedUser = {
-    id: 1,
-    openId: "sample-user",
-    email: "sample@example.com",
-    name: "Sample User",
-    loginMethod: "manus",
-    role: "user",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    lastSignedIn: new Date(),
-  };
-  
-  const ctx: TrpcContext = {
-    user,
-    req: {
-      protocol: "https",
-      headers: {},
-    } as TrpcContext["req"],
-    res: {
-      clearCookie: (name: string, options: Record<string, unknown>) => {
-        clearedCookies.push({ name, options });
-      },
-    } as TrpcContext["res"],
-  };
-  
-  return { ctx, clearedCookies };
-}
-
-// TODO: Remove `.skip` below once you implement user authentication
-describe.skip("auth.logout", () => {
-  it("clears the session cookie and reports success", async () => {
-    const { ctx, clearedCookies } = createAuthContext();
-    const caller = appRouter.createCaller(ctx);
-
-    const result = await caller.auth.logout();
-
-    expect(result).toEqual({ success: true });
-    expect(clearedCookies).toHaveLength(1);
-    expect(clearedCookies[0]?.name).toBe(COOKIE_NAME);
-    expect(clearedCookies[0]?.options).toMatchObject({
-      maxAge: -1,
-      secure: true,
-      sameSite: "none",
-      httpOnly: true,
-      path: "/",
-    });
+describe("RequestAuthenticator", () => {
+  it("resolves users from a Cognito bearer token", async () => {
+    // See tests/request-authenticator.test.ts for the full mock verifier setup.
   });
 });
 ```

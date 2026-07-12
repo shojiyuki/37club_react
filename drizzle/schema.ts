@@ -21,7 +21,7 @@ export const users = mysqlTable("users", {
    * Use this for relations between tables.
    */
   id: int("id").autoincrement().primaryKey(),
-  /** Temporary Manus OAuth identifier. Remove after the Cognito migration is complete. */
+  /** Legacy nullable provider identifier. New auth identities live in auth_accounts. */
   openId: varchar("openId", { length: 64 }).unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
