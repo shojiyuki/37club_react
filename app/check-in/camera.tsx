@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Dimensions,
@@ -109,7 +109,7 @@ function FlipIcon({ color }: { color: string }) {
 
 // ─── Animated Flash Button ────────────────────────────────────────────────────
 
-function FlashButton({ flash, onPress }: { flash: "off" | "on"; onPress: () => void }) {
+function FlashButton({ torchEnabled, onPress }: { torchEnabled: boolean; onPress: () => void }) {
   const glowOpacity = useSharedValue(0);
 
   const glowStyle = useAnimatedStyle(() => ({
@@ -117,7 +117,7 @@ function FlashButton({ flash, onPress }: { flash: "off" | "on"; onPress: () => v
   }));
 
   function handlePress() {
-    if (flash === "off") {
+    if (!torchEnabled) {
       // Trigger neon flash animation when turning ON
       glowOpacity.value = withSequence(
         withTiming(1, { duration: 80 }),
@@ -132,10 +132,10 @@ function FlashButton({ flash, onPress }: { flash: "off" | "on"; onPress: () => v
       style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
       onPress={handlePress}
     >
-      {flash === "on" && (
+      {torchEnabled && (
         <Animated.View style={[styles.flashGlow, glowStyle]} />
       )}
-      <FlashIcon on={flash === "on"} />
+      <FlashIcon on={torchEnabled} />
     </Pressable>
   );
 }
@@ -179,7 +179,7 @@ export default function CameraScreen() {
   const { exitCommunity, mode } = useAppMode();
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<"back" | "front">("back");
-  const [flash, setFlash] = useState<"off" | "on">("off");
+  const [torchEnabled, setTorchEnabled] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const cameraRef = useRef<CameraView>(null);
 
@@ -191,6 +191,12 @@ export default function CameraScreen() {
   const topicId = params.topicId;
   const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000 + 12 * 1000;
   const startAt = params.startAt ?? new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
+
+  useEffect(() => {
+    if (facing === "front" && torchEnabled) {
+      setTorchEnabled(false);
+    }
+  }, [facing, torchEnabled]);
 
   // ── Permission handling ──────────────────────────────────────────────────
 
@@ -259,11 +265,14 @@ export default function CameraScreen() {
     setFacing((cur) => (cur === "back" ? "front" : "back"));
   }
 
-  function handleToggleFlash() {
+  function handleToggleTorch() {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    setFlash((cur) => (cur === "off" ? "on" : "off"));
+    if (facing === "front") {
+      return;
+    }
+    setTorchEnabled((cur) => !cur);
   }
 
   function handleCancel() {
@@ -314,14 +323,15 @@ export default function CameraScreen() {
           ref={cameraRef}
           style={styles.camera}
           facing={facing}
-          flash={flash}
+          flash="off"
+          enableTorch={torchEnabled}
         />
       </View>
 
       {/* Bottom controls */}
       <View style={styles.bottomControls}>
         {/* Flash toggle */}
-        <FlashButton flash={flash} onPress={handleToggleFlash} />
+        <FlashButton torchEnabled={torchEnabled} onPress={handleToggleTorch} />
 
         {/* Shutter */}
         <Pressable
