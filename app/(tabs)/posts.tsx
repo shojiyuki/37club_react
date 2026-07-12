@@ -583,7 +583,7 @@ function TabBar({
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
   const { activeTopicStartAt } = useAppMode();
-  const { posts } = usePosts();
+  const { posts, refreshPosts } = usePosts();
   const { followingPosts, getFollowState, updateFollowState } = useFollow(posts);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [selectedPost, setSelectedPost] = useState<AppPost | null>(null);
@@ -593,14 +593,19 @@ export default function PostsScreen() {
   const [isReloading, setIsReloading] = useState(false);
   const reloadRotation = useSharedValue(0);
 
-  function handleReload() {
+  async function handleReload() {
     if (isReloading) return;
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsReloading(true);
     reloadRotation.value = 0;
-    reloadRotation.value = withTiming(360, { duration: 600, easing: Easing.out(Easing.cubic) }, () => {
-      runOnJS(setIsReloading)(false);
-    });
+    reloadRotation.value = withTiming(360, { duration: 600, easing: Easing.out(Easing.cubic) });
+    try {
+      await refreshPosts();
+    } catch (error) {
+      console.error("[posts] refresh failed", error);
+    } finally {
+      setIsReloading(false);
+    }
   }
 
   const reloadIconStyle = useAnimatedStyle(() => ({
