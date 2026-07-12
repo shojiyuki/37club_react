@@ -48,6 +48,38 @@ const PILL_WIDTH = SCREEN_WIDTH * 0.77;
 const PILL_HEIGHT = 56;
 const PILL_RADIUS = 28;
 
+const CHECK_IN_ERROR_MESSAGES: Record<string, string> = {
+  ACTIVE_PARTICIPATION_EXISTS: "すでに参加中のトピックがあります。先にCHECK OUTしてください。",
+  IMAGE_ALREADY_USED: "この写真はすでに使用されています。撮り直してもう一度お試しください。",
+  IMAGE_NOT_FOUND: "写真のアップロード確認に失敗しました。撮り直してもう一度お試しください。",
+  INVALID_IMAGE_CONTENT_TYPE: "この写真形式は使用できません。撮り直してもう一度お試しください。",
+  IMAGE_TOO_LARGE: "写真のサイズが大きすぎます。撮り直してもう一度お試しください。",
+  INVALID_IMAGE_KEY: "写真の保存先を確認できませんでした。撮り直してもう一度お試しください。",
+  INVALID_LOCATION: "現在地を正しく取得できませんでした。少し待ってからもう一度お試しください。",
+  LOCATION_TOO_INACCURATE: "位置情報の精度が低いためCHECK INできません。少し待ってからもう一度お試しください。",
+  OUTSIDE_TOPIC_AREA: "現在地がトピックの範囲外です。開催場所の近くでCHECK INしてください。",
+  TOPIC_CLOSED: "このトピックは終了しました。TOPから参加できるトピックを選び直してください。",
+  TOPIC_NOT_FOUND: "トピックが見つかりません。TOPから入り直してください。",
+  TOPIC_NOT_STARTED: "このトピックはまだ開始していません。開始時間になってからCHECK INしてください。",
+  "Location permission was denied": "位置情報の許可が必要です。端末の設定で位置情報を許可してからもう一度お試しください。",
+  "Topic ID is missing": "トピック情報を確認できませんでした。TOPから入り直してください。",
+  "Image URI is required": "写真を確認できませんでした。撮り直してもう一度お試しください。",
+};
+
+function getCheckInErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : null;
+  if (message && CHECK_IN_ERROR_MESSAGES[message]) {
+    return CHECK_IN_ERROR_MESSAGES[message];
+  }
+  if (message?.startsWith("Failed to load image")) {
+    return "写真を読み込めませんでした。撮り直してもう一度お試しください。";
+  }
+  if (message?.startsWith("Failed to upload image")) {
+    return "写真のアップロードに失敗しました。通信状況を確認してもう一度お試しください。";
+  }
+  return "CHECK INに失敗しました。もう一度お試しください。";
+}
+
 async function getCurrentCheckInLocation() {
   const permission = await Location.requestForegroundPermissionsAsync();
   if (permission.status !== Location.PermissionStatus.GRANTED) {
@@ -143,6 +175,7 @@ export default function PreviewScreen() {
         });
         return;
       }
+      const location = await getCurrentCheckInLocation();
       const image = await loadUploadableImage(uri);
       const uploadTarget = await createUploadUrl({
         contentType: image.contentType,
@@ -153,7 +186,6 @@ export default function PreviewScreen() {
         image,
       });
       uploadedImageStorageKey = uploadTarget.imageStorageKey;
-      const location = await getCurrentCheckInLocation();
       await checkIn({
         topicId,
         imageStorageKey: uploadTarget.imageStorageKey,
@@ -173,7 +205,7 @@ export default function PreviewScreen() {
           console.warn("[check-in preview] discard upload failed", discardError);
         }
       }
-      setPostError("CHECK INに失敗しました。もう一度お試しください。");
+      setPostError(getCheckInErrorMessage(error));
     }
   }
 
