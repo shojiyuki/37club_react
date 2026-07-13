@@ -21,6 +21,7 @@ function createUser(overrides: Partial<ChatUserRecord> = {}): ChatUserRecord {
     createdAt: NOW,
     updatedAt: NOW,
     lastSignedIn: NOW,
+    deletedAt: null,
     ...overrides,
   };
 }

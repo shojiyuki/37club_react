@@ -1,5 +1,6 @@
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
+import { accountRouter } from "./routers/account-router";
 import { chatRouter } from "./routers/chat-router";
 import { followRouter } from "./routers/follow-router";
 import { participationRouter } from "./routers/participation-router";
@@ -8,6 +9,7 @@ import { storageRouter } from "./routers/storage-router";
 import { topicsRouter } from "./routers/topics-router";
 
 export const appRouter = router({
+  account: accountRouter,
   chat: chatRouter,
   system: systemRouter,
   follow: followRouter,

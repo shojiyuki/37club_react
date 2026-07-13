@@ -19,6 +19,7 @@ const user: User = {
   createdAt: new Date(),
   updatedAt: new Date(),
   lastSignedIn: new Date(),
+  deletedAt: null,
 };
 
 function createRepository(): AuthAccountRepository {

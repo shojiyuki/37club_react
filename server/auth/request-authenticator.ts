@@ -22,7 +22,12 @@ export class RequestAuthenticator {
       return null;
     }
 
-    return this.userResolver.resolve(identity);
+    const user = await this.userResolver.resolve(identity);
+    if (user.deletedAt) {
+      return null;
+    }
+
+    return user;
   }
 
   private getBearerToken(req: Request): string | null {

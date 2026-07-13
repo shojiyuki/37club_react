@@ -29,6 +29,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Polyline } from "react-native-svg";
 import { useAuth } from "@/hooks/use-auth";
+import { trpc } from "@/lib/trpc";
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -106,6 +107,8 @@ function Section({ children }: { children: React.ReactNode }) {
 export default function MyPageScreen() {
   const insets = useSafeAreaInsets();
   const { logout, loading } = useAuth();
+  const deleteAccountMutation = trpc.account.deleteMe.useMutation();
+  const isDeletingAccount = deleteAccountMutation.isPending;
 
   function showComingSoon(label: string) {
     if (Platform.OS === "web") {
@@ -150,11 +153,42 @@ export default function MyPageScreen() {
     );
   }
 
+  async function performDeleteAccount() {
+    try {
+      await deleteAccountMutation.mutateAsync();
+      await logout();
+      router.replace("/login" as any);
+    } catch {
+      if (Platform.OS === "web") {
+        window.alert("アカウント削除に失敗しました。もう一度お試しください。");
+        return;
+      }
+
+      Alert.alert("Delete Account Failed", "アカウント削除に失敗しました。もう一度お試しください。");
+    }
+  }
+
   function handleDeleteAccount() {
+    if (loading || isDeletingAccount) return;
+
+    if (Platform.OS === "web") {
+      if (window.confirm("アカウントを削除しますか？\n投稿・チャット履歴は残ります。")) {
+        void performDeleteAccount();
+      }
+      return;
+    }
+
     Alert.alert(
       "Delete Account",
-      "アカウント削除は仕様確定後に対応します。",
-      [{ text: "OK", style: "default" }],
+      "アカウントを削除しますか？\n投稿・チャット履歴は残ります。",
+      [
+        { text: "キャンセル", style: "cancel" },
+        {
+          text: "Delete Account",
+          style: "destructive",
+          onPress: () => void performDeleteAccount(),
+        },
+      ],
       { cancelable: true }
     );
   }

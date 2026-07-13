@@ -68,6 +68,7 @@ function createPostRecord(
       createdAt: NOW,
       updatedAt: NOW,
       lastSignedIn: NOW,
+      deletedAt: null,
       ...overrides.user,
     },
     topic: {

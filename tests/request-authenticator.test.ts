@@ -20,6 +20,7 @@ const user: User = {
   createdAt: new Date(),
   updatedAt: new Date(),
   lastSignedIn: new Date(),
+  deletedAt: null,
 };
 
 function createRequest(authorization?: string): Request {
@@ -72,6 +73,23 @@ describe("RequestAuthenticator", () => {
       authenticator.authenticate(createRequest("Bearer invalid-token")),
     ).resolves.toBeNull();
     expect(dependencies.userResolver.resolve).not.toHaveBeenCalled();
+  });
+
+  it("returns null when the resolved user is deleted", async () => {
+    const dependencies = createDependencies();
+    vi.mocked(dependencies.tokenVerifier.verify).mockResolvedValue(identity);
+    dependencies.userResolver.resolve.mockResolvedValue({
+      ...user,
+      deletedAt: new Date("2026-07-13T00:00:00.000Z"),
+    });
+    const authenticator = new RequestAuthenticator(
+      dependencies.tokenVerifier,
+      dependencies.userResolver,
+    );
+
+    await expect(
+      authenticator.authenticate(createRequest("Bearer access-token")),
+    ).resolves.toBeNull();
   });
 
   it("does not hide database errors after successful token verification", async () => {

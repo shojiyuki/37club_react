@@ -13,6 +13,7 @@ const user: User = {
   createdAt: new Date("2026-07-09T00:00:00.000Z"),
   updatedAt: new Date("2026-07-09T00:00:00.000Z"),
   lastSignedIn: new Date("2026-07-09T00:00:00.000Z"),
+  deletedAt: null,
 };
 
 function createCaller(currentUser: User | null = user) {
