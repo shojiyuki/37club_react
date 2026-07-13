@@ -107,6 +107,15 @@ export default function MyPageScreen() {
   const insets = useSafeAreaInsets();
   const { logout, loading } = useAuth();
 
+  function showComingSoon(label: string) {
+    if (Platform.OS === "web") {
+      window.alert(`${label}\nこの項目はまだ準備中です。`);
+      return;
+    }
+
+    Alert.alert(label, "この項目はまだ準備中です。");
+  }
+
   async function performLogOut() {
     try {
       await logout();
@@ -144,17 +153,8 @@ export default function MyPageScreen() {
   function handleDeleteAccount() {
     Alert.alert(
       "Delete Account",
-      "アカウントを削除すると元に戻せません。本当に削除しますか？",
-      [
-        { text: "キャンセル", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => {
-            // TODO: call delete account API
-          },
-        },
-      ],
+      "アカウント削除は仕様確定後に対応します。",
+      [{ text: "OK", style: "default" }],
       { cancelable: true }
     );
   }
@@ -187,27 +187,27 @@ export default function MyPageScreen() {
           <View style={styles.divider} />
           <Row
             label="Notifications"
-            onPress={() => {}}
+            onPress={() => showComingSoon("Notifications")}
           />
           <View style={styles.divider} />
           <Row
             label="Participation"
-            onPress={() => {}}
+            onPress={() => showComingSoon("Participation")}
           />
           <View style={styles.divider} />
           <Row
             label="Membership"
-            onPress={() => {}}
+            onPress={() => showComingSoon("Membership")}
           />
           <View style={styles.divider} />
           <Row
             label="Rules & Safety"
-            onPress={() => {}}
+            onPress={() => showComingSoon("Rules & Safety")}
           />
           <View style={styles.divider} />
           <Row
             label="Support"
-            onPress={() => {}}
+            onPress={() => showComingSoon("Support")}
           />
         </Section>
 

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Polyline } from "react-native-svg";
+import { useAuth } from "@/hooks/use-auth";
 
 // ─── Colors ──────────────────────────────────────────────────────────────────
 
@@ -88,15 +89,10 @@ function Section({ children }: { children: React.ReactNode }) {
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
 
-// Mock user data
-const USER = {
-  username: "@me_37club",
-  userId: "37C-00142",
-  phone: "••• •••• 4521",
-};
-
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const userName = user?.name ? `@${user.name}` : user ? `@user_${user.id}` : "Guest";
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -119,11 +115,7 @@ export default function AccountScreen() {
       >
         {/* User info */}
         <Section>
-          <InfoRow label="Username" value={USER.username} />
-          <View style={styles.divider} />
-          <InfoRow label="User ID" value={USER.userId} />
-          <View style={styles.divider} />
-          <InfoRow label="Phone Number" value={USER.phone} />
+          <InfoRow label="Username" value={userName} />
         </Section>
 
         {/* Restricted Accounts */}
