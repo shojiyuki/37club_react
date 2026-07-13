@@ -129,7 +129,7 @@ export default function PreviewScreen() {
       -1,
       false
     );
-  }, []);
+  }, [glowOpacity]);
 
   const glowStyle = useAnimatedStyle(() => ({
     shadowOpacity: glowOpacity.value + pressGlow.value,

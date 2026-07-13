@@ -149,7 +149,7 @@ function PostBottomSheet({
     } else if (!visible) {
       translateY.value = withTiming(SHEET_70, { duration: 300 });
     }
-  }, [visible, post?.id, resetMessages]);
+  }, [isChatMode, post, resetMessages, sheetHeight, translateY, visible]);
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -466,18 +466,20 @@ function TabBar({
   const underlineX = useSharedValue(0);
   const underlineW = useSharedValue(0);
   const glowOpacity = useSharedValue(1);
+  const activeTabIndex = TAB_KEYS.indexOf(activeTab);
+  const activeTabWidth = tabWidths[activeTabIndex] ?? 0;
+  const activeTabOffset = tabOffsets[activeTabIndex] ?? 0;
 
   React.useEffect(() => {
-    const idx = TAB_KEYS.indexOf(activeTab);
-    if (tabWidths[idx] === 0) return;
-    underlineX.value = withTiming(tabOffsets[idx] + (tabWidths[idx] - 28) / 2, {
+    if (activeTabWidth === 0) return;
+    underlineX.value = withTiming(activeTabOffset + (activeTabWidth - 28) / 2, {
       duration: 150,
       easing: Easing.out(Easing.quad),
     });
     underlineW.value = withTiming(28, { duration: 150 });
     glowOpacity.value = 0;
     glowOpacity.value = withTiming(1, { duration: 200 });
-  }, [activeTab, tabWidths[0], tabWidths[1]]);
+  }, [activeTabIndex, activeTabOffset, activeTabWidth, glowOpacity, underlineW, underlineX]);
 
   const underlineStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: underlineX.value }],
@@ -597,7 +599,7 @@ export default function PostsScreen() {
     if (newTab !== activeTab) setActiveTab(newTab);
   }
 
-  function handlePostPress(post: AppPost) {
+  const handlePostPress = useCallback((post: AppPost) => {
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const merged: AppPost = {
       ...post,
@@ -605,7 +607,7 @@ export default function PostsScreen() {
     };
     setSelectedPost(merged);
     setSheetVisible(true);
-  }
+  }, [getFollowState]);
 
   async function handleFollowChange(userId: string, next: AppFollowState) {
     const previousState =
@@ -648,7 +650,7 @@ export default function PostsScreen() {
         }
       />
     ),
-    [getFollowState]
+    [getFollowState, handlePostPress]
   );
 
   return (

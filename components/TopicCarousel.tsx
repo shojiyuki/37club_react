@@ -225,7 +225,7 @@ function TopicCard({ topic, isLive, pinned, onTogglePin }: TopicCardProps) {
 
   useEffect(() => {
     pinOpacity.value = withTiming(pinned ? 1 : 0, { duration: 150 });
-  }, [pinned]);
+  }, [pinOpacity, pinned]);
 
   return (
     <View style={[styles.cardGlowWrapper, isLive && styles.cardGlowWrapperLive]}>
@@ -292,7 +292,7 @@ function OutlinePillButton({
       -1,
       false
     );
-  }, []);
+  }, [glowOpacity]);
 
   const glowStyle = useAnimatedStyle(() => ({
     shadowOpacity: glowOpacity.value + pressGlow.value,
@@ -495,7 +495,7 @@ export function TopicCarousel({
   const filterPinGlow = useSharedValue(showPinnedOnly ? 0.7 : 0);
   useEffect(() => {
     filterPinGlow.value = withTiming(showPinnedOnly ? 0.7 : 0, { duration: 200 });
-  }, [showPinnedOnly]);
+  }, [filterPinGlow, showPinnedOnly]);
 
   const filterGlowStyle = useAnimatedStyle(() => ({
     shadowOpacity: filterPinGlow.value,

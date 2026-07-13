@@ -52,6 +52,7 @@ export default function LightsOutScreen() {
   const checkoutInFlight = useRef(false);
   const checkoutCompleted = useRef(false);
   const reverseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sequenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [reverseReady, setReverseReady] = useState(false);
   const [checkoutStatus, setCheckoutStatus] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -107,6 +108,32 @@ export default function LightsOutScreen() {
     }
   });
 
+  // ── LIGHTS OUT animation sequence ────────────────────────────────────────
+  const startLightsOutSequence = useCallback(() => {
+    // Fade + slide up LIGHTS OUT (0.4s easeOut)
+    lightsOutOpacity.value = withSequence(
+      withTiming(1, { duration: 400, easing: Easing.out(Easing.ease) }),
+      // hold 0.8s
+      withDelay(800,
+        // fade out 0.3s
+        withTiming(0, { duration: 300, easing: Easing.in(Easing.ease) })
+      )
+    );
+    lightsOutTranslateY.value = withTiming(0, {
+      duration: 400,
+      easing: Easing.out(Easing.ease),
+    });
+
+    // Screen fade out after full sequence: 0.4 + 0.8 + 0.3 = 1.5s
+    screenOpacity.value = withDelay(
+      1500,
+      withTiming(0, { duration: 300, easing: Easing.in(Easing.ease) })
+    );
+
+    // Navigate after screen fades
+    sequenceTimerRef.current = setTimeout(navigate, 1800);
+  }, [lightsOutOpacity, lightsOutTranslateY, navigate, screenOpacity]);
+
   // Start reverse playback once video is ready
   useEffect(() => {
     if (!reverseReady || checkoutStatus !== "ready") return;
@@ -130,8 +157,7 @@ export default function LightsOutScreen() {
           reverseTimerRef.current = null;
         }
         // 0.2s static pause, then animate LIGHTS OUT
-        const t = setTimeout(() => startLightsOutSequence(), 200);
-        return () => clearTimeout(t);
+        sequenceTimerRef.current = setTimeout(() => startLightsOutSequence(), 200);
       } else {
         player.currentTime = next;
       }
@@ -142,35 +168,12 @@ export default function LightsOutScreen() {
         clearInterval(reverseTimerRef.current);
         reverseTimerRef.current = null;
       }
+      if (sequenceTimerRef.current) {
+        clearTimeout(sequenceTimerRef.current);
+        sequenceTimerRef.current = null;
+      }
     };
-  }, [checkoutStatus, reverseReady]);
-
-  // ── LIGHTS OUT animation sequence ────────────────────────────────────────
-  function startLightsOutSequence() {
-    // Fade + slide up LIGHTS OUT (0.4s easeOut)
-    lightsOutOpacity.value = withSequence(
-      withTiming(1, { duration: 400, easing: Easing.out(Easing.ease) }),
-      // hold 0.8s
-      withDelay(800,
-        // fade out 0.3s
-        withTiming(0, { duration: 300, easing: Easing.in(Easing.ease) })
-      )
-    );
-    lightsOutTranslateY.value = withTiming(0, {
-      duration: 400,
-      easing: Easing.out(Easing.ease),
-    });
-
-    // Screen fade out after full sequence: 0.4 + 0.8 + 0.3 = 1.5s
-    screenOpacity.value = withDelay(
-      1500,
-      withTiming(0, { duration: 300, easing: Easing.in(Easing.ease) })
-    );
-
-    // Navigate after screen fades
-    const t = setTimeout(navigate, 1800);
-    return () => clearTimeout(t);
-  }
+  }, [checkoutStatus, player, reverseReady, startLightsOutSequence]);
 
   // ── Animated styles ───────────────────────────────────────────────────────
   const lightsOutStyle = useAnimatedStyle(() => ({

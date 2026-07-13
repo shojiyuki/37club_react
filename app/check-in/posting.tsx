@@ -53,7 +53,7 @@ export default function PostingScreen() {
     }, 600);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [remainingMs, rotation, startAt]);
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
