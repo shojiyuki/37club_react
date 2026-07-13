@@ -144,7 +144,6 @@ function FlashButton({ torchEnabled, onPress }: { torchEnabled: boolean; onPress
 
 function FlipButton({ onPress }: { onPress: () => void }) {
   const rotation = useSharedValue(0);
-  const iconColor = useSharedValue(0); // 0 = white, 1 = neon
   const [tapped, setTapped] = useState(false);
 
   const rotateStyle = useAnimatedStyle(() => ({

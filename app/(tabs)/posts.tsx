@@ -28,7 +28,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChatBubble, ChatContextHeader, ChatInputBar, ChatMessageList } from "@/components/chat";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
-import { useChatMessages, type ChatMessage } from "@/hooks/use-chat-messages";
+import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useFollow } from "@/hooks/use-follow";
 import { usePosts } from "@/hooks/use-posts";
 import { useAppMode } from "@/lib/app-mode-context";

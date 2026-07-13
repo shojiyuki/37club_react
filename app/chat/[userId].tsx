@@ -17,7 +17,7 @@ import { ChatContextHeader, ChatInputBar, ChatMessageList } from "@/components/c
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useChatContextPost } from "@/hooks/use-chat-context-post";
-import { useChatMessages, type ChatMessage } from "@/hooks/use-chat-messages";
+import { useChatMessages } from "@/hooks/use-chat-messages";
 import { useAppMode } from "@/lib/app-mode-context";
 
 // ─── Constants ───────────────────────────────────────────────────────────────

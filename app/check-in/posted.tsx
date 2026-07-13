@@ -17,7 +17,7 @@
 
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef } from "react";
-import { Dimensions, Platform, StyleSheet, Text, View } from "react-native";
+import { Dimensions, Platform, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,

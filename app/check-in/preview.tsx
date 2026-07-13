@@ -2,7 +2,7 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -21,7 +21,6 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { useEffect } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useParticipation } from "@/hooks/use-participation";
