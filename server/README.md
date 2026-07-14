@@ -30,8 +30,30 @@ Optional:
 | --- | --- |
 | `OWNER_OPEN_ID` | Legacy nullable owner identifier used only for local admin role assignment |
 | `AWS_PROFILE` | Local AWS profile. The SDK resolves credentials from `~/.aws/credentials` |
+| `API_ALLOWED_ORIGINS` | Comma-separated browser origins allowed by CORS. Origin-less native/server requests are allowed |
+| `API_CORS_CREDENTIALS` | Set `true` only if cookie credentials are required. Default is `false` |
+| `API_BODY_LIMIT` | Express JSON/urlencoded body limit. Defaults to `2mb` in production and `50mb` otherwise |
+| `API_RATE_LIMIT_ENABLED` | Enable in-memory per-IP rate limiting. Defaults to `true` in production |
+| `API_RATE_LIMIT_WINDOW_MS` | Rate limit window in milliseconds. Default is `60000` |
+| `API_RATE_LIMIT_MAX` | Global max requests per IP/window. Default is `300` |
+| `API_SENSITIVE_RATE_LIMIT_MAX` | Max sensitive requests per IP/window. Default is `30` |
 
 Client runtime selection is handled by `.env.*`, `scripts/sync-env.js`, `app.config.ts`, and `constants/runtime-config.ts`.
+
+## HTTP Hardening
+
+Server entrypoint hardening lives in `server/_core/http-hardening.ts`.
+
+Current MVP policy:
+
+- CORS allows only `API_ALLOWED_ORIGINS` for browser requests.
+- Requests without a browser `Origin` are allowed for native apps, curl, server-to-server calls, and health checks.
+- Cookie credentials are disabled unless `API_CORS_CREDENTIALS=true`.
+- `X-Content-Type-Options`, `Referrer-Policy`, and `X-Frame-Options` are set without adding a dependency.
+- Express `x-powered-by` is disabled.
+- Body size is reduced to `2mb` in production by default because images are uploaded directly to S3.
+- Rate limiting is in-memory and intended for the first single-instance Lightsail MVP.
+- Sensitive rate limiting applies to `storage.createUploadUrl`, `participation.checkIn`, and `chat.sendMessage`.
 
 ## Authentication
 
