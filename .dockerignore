@@ -1,0 +1,16 @@
+.codex
+.expo
+.git
+.manus-logs
+.pnpm-store
+.vscode
+ios
+node_modules
+dist
+coverage
+npm-debug.log
+pnpm-debug.log
+.env
+.env.local
+.env.development
+.env.mock
