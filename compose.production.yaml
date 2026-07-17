@@ -1,3 +1,5 @@
+name: 37club-production
+
 services:
   mysql:
     image: mysql:8.0
