@@ -16,6 +16,18 @@ def _json_default(value: Any) -> str:
     return str(value)
 
 
+def _operation_summary(response: dict[str, Any]) -> dict[str, Any]:
+    operations = response.get("operations") or []
+    operation = operations[0] if operations else {}
+    return {
+        "operationId": operation.get("id"),
+        "operationType": operation.get("operationType"),
+        "operationStatus": operation.get("status"),
+        "operationResourceName": operation.get("resourceName"),
+        "operationResourceType": operation.get("resourceType"),
+    }
+
+
 def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     instance_name = os.environ["LIGHTSAIL_INSTANCE_NAME"]
     region = os.environ.get("LIGHTSAIL_REGION", "ap-northeast-1")
@@ -61,13 +73,23 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         }
 
     response = lightsail.stop_instance(instanceName=instance_name)
-    print(json.dumps(response, ensure_ascii=False, default=_json_default))
+    operation_summary = _operation_summary(response)
+    print(
+        json.dumps(
+            {
+                "message": "stop instance requested",
+                "instanceName": instance_name,
+                **operation_summary,
+            },
+            ensure_ascii=False,
+        )
+    )
 
     return {
         "ok": True,
-        "action": "stop_instance",
+        "action": "stopped",
         "instanceName": instance_name,
         "state": state,
         "dryRun": dry_run,
-        "operations": response.get("operations", []),
+        **operation_summary,
     }
