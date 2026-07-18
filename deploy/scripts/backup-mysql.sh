@@ -94,7 +94,7 @@ log "starting MySQL dump: database=${MYSQL_DATABASE}"
 cd "$APP_DIR"
 
 docker compose -f "$COMPOSE_FILE" exec -T mysql sh -lc \
-  'mysqldump --default-character-set=utf8mb4 --single-transaction --quick --routines --triggers -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  'mysqldump --default-character-set=utf8mb4 --single-transaction --quick --routines --triggers --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
   > "$sql_path"
 
 [ -s "$sql_path" ] || die "dump file is empty: $sql_path"
