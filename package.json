@@ -7,6 +7,10 @@
     "node": ">=22 <23"
   },
   "scripts": {
+    "env:mock": "node scripts/sync-env.js mock",
+    "env:local": "node scripts/sync-env.js local",
+    "env:development": "node scripts/sync-env.js development",
+    "env:production": "node scripts/sync-env.js production",
     "dev": "concurrently -k \"pnpm dev:server\" \"pnpm dev:metro\"",
     "dev:mock": "node scripts/sync-env.js mock && pnpm dev:metro:clear",
     "dev:mock:clear": "node scripts/sync-env.js mock && pnpm dev:metro:clear",

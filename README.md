@@ -287,6 +287,10 @@ isMockDataSource();
 ## よく使うコマンド
 
 ```sh
+pnpm env:mock     # copy .env.mock -> .env
+pnpm env:local    # copy .env.local -> .env
+pnpm env:development # copy .env.development -> .env
+pnpm env:production  # copy .env.production -> .env
 pnpm dev          # server + Expo Metro
 pnpm dev:mock     # copy .env.mock, then Expo Metro with clear cache
 pnpm dev:mock:clear # same as dev:mock
