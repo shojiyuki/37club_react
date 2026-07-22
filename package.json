@@ -33,6 +33,10 @@
     "db:local:logs": "docker-compose logs -f mysql",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "ios:production:dev-client": "pnpm env:production && expo run:ios --device",
+    "ios:production:release": "pnpm env:production && expo run:ios --device --configuration Release",
+    "eas:build:ios:production": "pnpm dlx eas-cli build --platform ios --profile production",
+    "eas:submit:ios:production": "pnpm dlx eas-cli submit --platform ios --profile production",
     "qr": "node scripts/generate_qr.mjs"
   },
   "dependencies": {

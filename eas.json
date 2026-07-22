@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 15.0.0"
+  },
+  "build": {
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "APP_ENV": "production",
+        "DATA_SOURCE_PRODUCTION": "api",
+        "API_BASE_URL_PRODUCTION": "https://api.37club.net",
+        "API_DOMAIN": "api.37club.net",
+        "COGNITO_ISSUER": "https://cognito-idp.ap-northeast-1.amazonaws.com/ap-northeast-1_Pc1N2LdIy",
+        "COGNITO_DOMAIN": "https://ap-northeast-1pc1n2ldiy.auth.ap-northeast-1.amazoncognito.com",
+        "COGNITO_CLIENT_ID": "7c0ffqppgk4501n8oboi4mridq",
+        "COGNITO_SCOPES": "openid email"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {}
+    }
+  }
+}
