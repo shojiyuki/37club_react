@@ -2,6 +2,7 @@ import type {
   ActiveParticipationRecord,
   ParticipationRepository,
 } from "../repositories/participation-repository";
+import { logServerEvent } from "../_core/server-logger";
 import {
   DEFAULT_CHECK_IN_LOCATION_POLICY,
   validateCheckInLocation,
@@ -189,7 +190,10 @@ export class ParticipationService {
     try {
       await this.storage.deleteObject(imageStorageKey);
     } catch (error) {
-      console.warn("[participation] failed to delete replaced image", error);
+      logServerEvent("warn", "storage_delete_failed", {
+        operation: "delete_replaced_participation_image",
+        error_name: error instanceof Error ? error.name : "UnknownError",
+      });
     }
   }
 

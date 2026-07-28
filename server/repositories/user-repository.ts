@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 
 import { type InsertUser, users } from "../../drizzle/schema";
 import { ENV } from "../_core/env";
+import { logServerEvent } from "../_core/server-logger";
 import { getDb } from "../db";
 
 export async function upsertUser(user: InsertUser): Promise<void> {
@@ -11,7 +12,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
+    logServerEvent("error", "database_unavailable", { operation: "upsert_user" });
     return;
   }
 
@@ -58,7 +59,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       set: updateSet,
     });
   } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
+    logServerEvent("error", "database_operation_failed", {
+      operation: "upsert_user",
+      error_name: error instanceof Error ? error.name : "UnknownError",
+    });
     throw error;
   }
 }
@@ -66,7 +70,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) {
-    console.warn("[Database] Cannot get user: database not available");
+    logServerEvent("error", "database_unavailable", { operation: "get_user_by_open_id" });
     return undefined;
   }
 

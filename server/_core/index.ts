@@ -11,6 +11,7 @@ import {
   createSecurityHeadersMiddleware,
   getBodyLimit,
 } from "./http-hardening";
+import { createRequestLoggingMiddleware, getRequestId, logServerEvent } from "./server-logger";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -37,6 +38,7 @@ async function startServer() {
 
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
+  app.use(createRequestLoggingMiddleware());
   app.use(createSecurityHeadersMiddleware());
   app.use(createCorsMiddleware());
   app.use(createRateLimitMiddleware());
@@ -54,19 +56,51 @@ async function startServer() {
     createExpressMiddleware({
       router: appRouter,
       createContext,
+      onError({ error, path, type, ctx }) {
+        logServerEvent("error", "trpc_error", {
+          request_id: ctx?.requestId,
+          procedure: path,
+          procedure_type: type,
+          error_code: error.code,
+          error_name: error.cause instanceof Error ? error.cause.name : error.name,
+        });
+      },
     }),
+  );
+
+  app.use(
+    (
+      error: unknown,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      logServerEvent("error", "express_error", {
+        request_id: getRequestId(res),
+        error_name: error instanceof Error ? error.name : "UnknownError",
+      });
+
+      if (!res.headersSent) {
+        res.status(500).json({ error: "INTERNAL_SERVER_ERROR" });
+      }
+    },
   );
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+    logServerEvent("warn", "api_port_fallback", { preferred_port: preferredPort, port });
   }
 
   server.listen(port, () => {
-    console.log(`[api] server listening on port ${port}`);
+    logServerEvent("info", "api_started", { port });
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((error: unknown) => {
+  logServerEvent("error", "api_start_failed", {
+    error_name: error instanceof Error ? error.name : "UnknownError",
+  });
+  process.exitCode = 1;
+});

@@ -1,5 +1,6 @@
 import { drizzle, type MySql2Database } from "drizzle-orm/mysql2";
 import mysql from "mysql2";
+import { logServerEvent } from "./_core/server-logger";
 
 let _db: MySql2Database<Record<string, unknown>> | null = null;
 
@@ -13,8 +14,8 @@ export async function getDb() {
           charset: "utf8mb4",
         }).promise(),
       );
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
+    } catch {
+      logServerEvent("error", "database_pool_create_failed");
       _db = null;
     }
   }
