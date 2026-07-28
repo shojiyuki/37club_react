@@ -176,6 +176,9 @@ const config: ExpoConfig = {
     cognitoDomain: env.cognitoDomain,
     cognitoClientId: env.cognitoClientId,
     cognitoScopes: env.cognitoScopes,
+    eas: {
+      projectId: "638069d9-24a1-42bf-8341-7ceb31f18a83",
+    },
   },
 };
 
