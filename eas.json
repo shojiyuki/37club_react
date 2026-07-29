@@ -1,11 +1,12 @@
 {
   "cli": {
-    "version": ">= 15.0.0"
+    "version": ">= 15.0.0",
+    "appVersionSource": "remote",
+    "promptToConfigurePushNotifications": false
   },
   "build": {
     "production": {
       "autoIncrement": true,
-      "channel": "production",
       "env": {
         "APP_ENV": "production",
         "DATA_SOURCE_PRODUCTION": "api",
