@@ -221,6 +221,44 @@ app.config.ts
   APP_ENV を見て現在の apiBaseUrl / dataSource を決める
 ```
 
+### `.env.local` の管理方針
+
+`.env.local` はlocal API / Docker MySQLへ接続するために必要な、開発者のMac専用設定ファイルです。
+ローカル起動には使用しますが、秘密情報や個人ごとの設定をGitHub・EAS Buildへ送らないため、Gitでは管理しません。
+
+```text
+.env.example
+  Gitで管理する設定項目のひな形
+  実際のsecretは書かない
+
+.env.local
+  Gitでは管理しない
+  開発者のMac上にだけ置く
+
+.env
+  Gitでは管理しない
+  dev:* / env:* コマンドが選択した.env.*から生成する実行時設定
+```
+
+`git rm --cached .env.local` はGitの管理対象から外す操作であり、Mac上のファイルを削除する操作ではありません。
+既存の `.env.local` がMacに残っていれば、これまでどおり `pnpm dev:local` で使用できます。
+
+新しいMacや新しい開発者環境では、初回だけ `.env.example` から作成し、必要な値を設定します。
+既存の `.env.local` がある環境では、次のcopyコマンドで上書きしないでください。
+
+```sh
+cp .env.example .env.local
+```
+
+設定後のlocal API起動:
+
+```sh
+pnpm dev:local
+```
+
+`.env.local` はGitから復元できないため、再取得できない値がある場合はPassword Managerなどrepository外の安全な場所で管理します。
+EASのproduction buildは `.env.local` ではなく、`eas.json` のproduction profileとEAS側に登録したsecretを使用します。
+
 起動:
 
 ```sh
