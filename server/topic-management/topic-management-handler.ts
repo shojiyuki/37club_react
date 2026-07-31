@@ -25,10 +25,18 @@ export function createTopicManagementHandler(
     }
 
     try {
-      const result =
-        parsedInput.data.action === "select"
-          ? await service.select(parsedInput.data)
-          : await service.insert(parsedInput.data);
+      let result;
+      switch (parsedInput.data.action) {
+        case "select":
+          result = await service.select(parsedInput.data);
+          break;
+        case "insert":
+          result = await service.insert(parsedInput.data);
+          break;
+        case "update":
+          result = await service.update(parsedInput.data);
+          break;
+      }
       res.json({ ok: true, ...result });
     } catch (error) {
       if (error instanceof TopicManagementTopicNotFoundError) {

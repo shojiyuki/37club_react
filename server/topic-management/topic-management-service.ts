@@ -1,10 +1,12 @@
 import type {
   TopicRecord,
   TopicsRepository,
+  UpdateTopicRecordInput,
 } from "../repositories/topics-repository";
 import type {
   TopicManagementInsertInput,
   TopicManagementSelectInput,
+  TopicManagementUpdateInput,
 } from "./topic-management-schema";
 
 export type ManagedTopic = {
@@ -29,6 +31,12 @@ export type TopicManagementSelectResult = {
 
 export type TopicManagementInsertResult = {
   action: "insert";
+  topic: ManagedTopic;
+};
+
+export type TopicManagementUpdateResult = {
+  action: "update";
+  before: ManagedTopic;
   topic: ManagedTopic;
 };
 
@@ -124,6 +132,29 @@ export class TopicManagementService {
     return {
       action: "insert",
       topic: toManagedTopic(record),
+    };
+  }
+
+  async update(
+    input: TopicManagementUpdateInput,
+  ): Promise<TopicManagementUpdateResult> {
+    const { startAt: startAtInput, ...otherChanges } = input.changes;
+    const changes: UpdateTopicRecordInput = { ...otherChanges };
+    if (startAtInput) {
+      const startAt = new Date(startAtInput);
+      changes.startAt = startAt;
+      changes.endAt = new Date(startAt.getTime() + 37 * 60 * 1000);
+    }
+
+    const result = await this.repository.update(input.topicId, changes);
+    if (!result) {
+      throw new TopicManagementTopicNotFoundError(input.topicId);
+    }
+
+    return {
+      action: "update",
+      before: toManagedTopic(result.before),
+      topic: toManagedTopic(result.after),
     };
   }
 }

@@ -34,6 +34,7 @@ function createRepository(records: TopicRecord[] = []): TopicsRepository {
         records.find((record) => record.id === topicId),
       ),
     create: vi.fn(),
+    update: vi.fn(),
   };
 }
 

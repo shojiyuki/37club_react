@@ -50,9 +50,24 @@ export const topicManagementInsertInputSchema = z
   })
   .strict();
 
+const updateChangesSchema = insertTopicSchema
+  .partial()
+  .refine((changes) => Object.keys(changes).length > 0, {
+    message: "changes must contain at least one field",
+  });
+
+export const topicManagementUpdateInputSchema = z
+  .object({
+    action: z.literal("update"),
+    topicId: z.number().int().positive(),
+    changes: updateChangesSchema,
+  })
+  .strict();
+
 export const topicManagementInputSchema = z.union([
   topicManagementSelectInputSchema,
   topicManagementInsertInputSchema,
+  topicManagementUpdateInputSchema,
 ]);
 
 export type TopicManagementSelectInput = z.infer<
@@ -61,4 +76,8 @@ export type TopicManagementSelectInput = z.infer<
 
 export type TopicManagementInsertInput = z.infer<
   typeof topicManagementInsertInputSchema
+>;
+
+export type TopicManagementUpdateInput = z.infer<
+  typeof topicManagementUpdateInputSchema
 >;

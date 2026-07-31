@@ -8,11 +8,20 @@ export type CreateTopicRecordInput = Pick<
   typeof topics.$inferInsert,
   "startAt" | "endAt" | "locationName" | "latitude" | "longitude" | "prompt"
 >;
+export type UpdateTopicRecordInput = Partial<CreateTopicRecordInput>;
+export type UpdateTopicRecordResult = {
+  before: TopicRecord;
+  after: TopicRecord;
+};
 
 export interface TopicsRepository {
   findCurrentAndUpcoming(now: Date): Promise<TopicRecord[]>;
   findById(topicId: number): Promise<TopicRecord | undefined>;
   create(input: CreateTopicRecordInput): Promise<TopicRecord>;
+  update(
+    topicId: number,
+    changes: UpdateTopicRecordInput,
+  ): Promise<UpdateTopicRecordResult | undefined>;
 }
 
 export class DrizzleTopicsRepository implements TopicsRepository {
@@ -64,6 +73,40 @@ export class DrizzleTopicsRepository implements TopicsRepository {
       }
 
       return record;
+    });
+  }
+
+  async update(
+    topicId: number,
+    changes: UpdateTopicRecordInput,
+  ): Promise<UpdateTopicRecordResult | undefined> {
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    return db.transaction(async (tx) => {
+      const existingRecords = await tx
+        .select()
+        .from(topics)
+        .where(eq(topics.id, topicId))
+        .limit(1);
+      const before = existingRecords[0];
+      if (!before) {
+        return undefined;
+      }
+
+      await tx.update(topics).set(changes).where(eq(topics.id, topicId));
+
+      const updatedRecords = await tx
+        .select()
+        .from(topics)
+        .where(eq(topics.id, topicId))
+        .limit(1);
+      const after = updatedRecords[0];
+      if (!after) {
+        throw new Error("Failed to read updated Topic");
+      }
+
+      return { before, after };
     });
   }
 }

@@ -112,3 +112,49 @@ describe("topicManagementInputSchema insert", () => {
     ).toBe(false);
   });
 });
+
+describe("topicManagementInputSchema update", () => {
+  it("accepts a partial update with a positive Topic ID", () => {
+    const input = {
+      action: "update",
+      topicId: 3,
+      changes: { prompt: "新しいお題" },
+    };
+
+    expect(topicManagementInputSchema.parse(input)).toEqual(input);
+  });
+
+  it("accepts a startAt update using Japan time", () => {
+    const input = {
+      action: "update",
+      topicId: 3,
+      changes: { startAt: "2000-01-01T00:00:00+09:00" },
+    };
+
+    expect(topicManagementInputSchema.parse(input)).toEqual(input);
+  });
+
+  it("rejects empty changes, invalid Topic IDs, and caller-supplied endAt", () => {
+    expect(
+      topicManagementInputSchema.safeParse({
+        action: "update",
+        topicId: 3,
+        changes: {},
+      }).success,
+    ).toBe(false);
+    expect(
+      topicManagementInputSchema.safeParse({
+        action: "update",
+        topicId: 0,
+        changes: { prompt: "新しいお題" },
+      }).success,
+    ).toBe(false);
+    expect(
+      topicManagementInputSchema.safeParse({
+        action: "update",
+        topicId: 3,
+        changes: { endAt: "2000-01-01T00:37:00+09:00" },
+      }).success,
+    ).toBe(false);
+  });
+});

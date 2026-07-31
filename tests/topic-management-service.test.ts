@@ -40,6 +40,17 @@ function createRepository(records: TopicRecord[]): TopicsRepository {
         ...input,
       }),
     ),
+    update: vi.fn().mockImplementation(async (topicId, changes) => {
+      const before = records.find((record) => record.id === topicId);
+      if (!before) {
+        return undefined;
+      }
+
+      return {
+        before,
+        after: createTopic({ ...before, ...changes }),
+      };
+    }),
   };
 }
 
@@ -126,5 +137,57 @@ describe("TopicManagementService", () => {
     expect(result.topic.topicId).toBe(10);
     expect(result.topic.startAtJst).toBe("2026-08-10T19:00:00+09:00");
     expect(result.topic.endAtJst).toBe("2026-08-10T19:37:00+09:00");
+  });
+
+  it("updates only requested fields and recalculates endAt when startAt changes", async () => {
+    const repository = createRepository([createTopic()]);
+    const service = new TopicManagementService(repository, () => NOW);
+
+    const result = await service.update({
+      action: "update",
+      topicId: 3,
+      changes: {
+        startAt: "2000-01-01T00:00:00+09:00",
+      },
+    });
+
+    expect(repository.update).toHaveBeenCalledWith(3, {
+      startAt: new Date("1999-12-31T15:00:00.000Z"),
+      endAt: new Date("1999-12-31T15:37:00.000Z"),
+    });
+    expect(result.action).toBe("update");
+    expect(result.before.startAtJst).toBe("2026-08-10T19:00:00+09:00");
+    expect(result.topic.startAtJst).toBe("2000-01-01T00:00:00+09:00");
+    expect(result.topic.endAtJst).toBe("2000-01-01T00:37:00+09:00");
+  });
+
+  it("does not change startAt or endAt when another field is updated", async () => {
+    const repository = createRepository([createTopic()]);
+    const service = new TopicManagementService(repository, () => NOW);
+
+    const result = await service.update({
+      action: "update",
+      topicId: 3,
+      changes: { prompt: "新しいお題" },
+    });
+
+    expect(repository.update).toHaveBeenCalledWith(3, {
+      prompt: "新しいお題",
+    });
+    expect(result.topic.prompt).toBe("新しいお題");
+    expect(result.topic.startAt).toBe(result.before.startAt);
+    expect(result.topic.endAt).toBe(result.before.endAt);
+  });
+
+  it("reports an unknown Topic ID during update", async () => {
+    const service = new TopicManagementService(createRepository([]), () => NOW);
+
+    await expect(
+      service.update({
+        action: "update",
+        topicId: 999,
+        changes: { prompt: "新しいお題" },
+      }),
+    ).rejects.toEqual(new TopicManagementTopicNotFoundError(999));
   });
 });
