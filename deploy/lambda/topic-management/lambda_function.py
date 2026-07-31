@@ -20,6 +20,38 @@ class ConfigurationError(RuntimeError):
     pass
 
 
+def _audit_action(event: dict[str, Any]) -> str:
+    action = event.get("action")
+    return action if action in {"select", "insert", "update"} else "invalid"
+
+
+def _audit_topic_id(
+    event: dict[str, Any], result: dict[str, Any] | None = None
+) -> int | None:
+    requested_topic_id = event.get("topicId")
+    if (
+        isinstance(requested_topic_id, int)
+        and not isinstance(requested_topic_id, bool)
+        and requested_topic_id > 0
+    ):
+        return requested_topic_id
+
+    if result is None:
+        return None
+
+    response = result.get("response")
+    topic = response.get("topic") if isinstance(response, dict) else None
+    created_topic_id = topic.get("topicId") if isinstance(topic, dict) else None
+    if (
+        isinstance(created_topic_id, int)
+        and not isinstance(created_topic_id, bool)
+        and created_topic_id > 0
+    ):
+        return created_topic_id
+
+    return None
+
+
 def _load_service_token(parameter_name: str, ssm_client: Any = None) -> str:
     global _cached_service_token
 
@@ -116,10 +148,12 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
         )
 
     lambda_request_id = getattr(context, "aws_request_id", "unknown")
-    action = event.get("action")
+    action = _audit_action(event)
+    requested_topic_id = _audit_topic_id(event)
     LOGGER.info(
-        "topic_management_started action=%s lambda_request_id=%s",
+        "topic_management_started action=%s topic_id=%s lambda_request_id=%s",
         action,
+        requested_topic_id,
         lambda_request_id,
     )
 
@@ -132,8 +166,9 @@ def lambda_handler(event: Any, context: Any) -> dict[str, Any]:
     )
 
     LOGGER.info(
-        "topic_management_completed action=%s lambda_request_id=%s status_code=%s ok=%s",
+        "topic_management_completed action=%s topic_id=%s lambda_request_id=%s status_code=%s ok=%s",
         action,
+        _audit_topic_id(event, result),
         lambda_request_id,
         result["statusCode"],
         result["ok"],
