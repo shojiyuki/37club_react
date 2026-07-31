@@ -154,6 +154,7 @@ describe("participation data sources", () => {
         lat: 35.7030952,
         lng: 139.6301901,
         items: "赤いもの",
+        locationRequired: true,
       },
     ];
     const current = createCurrentParticipation();
@@ -203,8 +204,8 @@ describe("participation data sources", () => {
       },
       topic: {
         id: checkInInput.topicId,
-        latitude: checkInInput.location.latitude,
-        longitude: checkInInput.location.longitude,
+        latitude: checkInInput.location?.latitude,
+        longitude: checkInInput.location?.longitude,
       },
       post: {
         imageStorageKey: checkInInput.imageStorageKey,
@@ -212,7 +213,9 @@ describe("participation data sources", () => {
       },
     });
     expect(new Date(result.serverNow).toISOString()).toBe(result.serverNow);
-    expect(new Date(result.expiresAt ?? "").toISOString()).toBe(result.expiresAt);
+    expect(new Date(result.expiresAt ?? "").toISOString()).toBe(
+      result.expiresAt,
+    );
   });
 
   it("delegates check-in to the server client", async () => {
@@ -226,7 +229,9 @@ describe("participation data sources", () => {
       ...createPostDependencies(),
     });
 
-    await expect(sources.participation.checkIn(checkInInput)).resolves.toBe(current);
+    await expect(sources.participation.checkIn(checkInInput)).resolves.toBe(
+      current,
+    );
     expect(checkIn).toHaveBeenCalledWith(checkInInput);
   });
 
@@ -290,7 +295,9 @@ describe("participation data sources", () => {
       contentLength: 1024,
     };
 
-    await expect(sources.storage.createUploadUrl(input)).resolves.toBe(uploadTarget);
+    await expect(sources.storage.createUploadUrl(input)).resolves.toBe(
+      uploadTarget,
+    );
     expect(createUploadUrl).toHaveBeenCalledWith(input);
   });
 
@@ -315,7 +322,9 @@ describe("participation data sources", () => {
     });
     const input = { imageStorageKey: "users/1/posts/orphan.png" };
 
-    await expect(sources.storage.discardUpload(input)).resolves.toEqual({ discarded: true });
+    await expect(sources.storage.discardUpload(input)).resolves.toEqual({
+      discarded: true,
+    });
     expect(discardUpload).toHaveBeenCalledWith(input);
   });
 
@@ -469,7 +478,9 @@ describe("participation data sources", () => {
       getChatMessages,
     });
 
-    await expect(sources.chat.messages({ targetUserId: "2" })).resolves.toBe(messages);
+    await expect(sources.chat.messages({ targetUserId: "2" })).resolves.toBe(
+      messages,
+    );
     expect(getChatMessages).toHaveBeenCalledWith({ targetUserId: "2" });
   });
 

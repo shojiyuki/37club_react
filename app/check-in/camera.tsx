@@ -109,7 +109,13 @@ function FlipIcon({ color }: { color: string }) {
 
 // ─── Animated Flash Button ────────────────────────────────────────────────────
 
-function FlashButton({ torchEnabled, onPress }: { torchEnabled: boolean; onPress: () => void }) {
+function FlashButton({
+  torchEnabled,
+  onPress,
+}: {
+  torchEnabled: boolean;
+  onPress: () => void;
+}) {
   const glowOpacity = useSharedValue(0);
 
   const glowStyle = useAnimatedStyle(() => ({
@@ -121,7 +127,7 @@ function FlashButton({ torchEnabled, onPress }: { torchEnabled: boolean; onPress
       // Trigger neon flash animation when turning ON
       glowOpacity.value = withSequence(
         withTiming(1, { duration: 80 }),
-        withTiming(0.4, { duration: 70 })
+        withTiming(0.4, { duration: 70 }),
       );
     }
     onPress();
@@ -132,9 +138,7 @@ function FlashButton({ torchEnabled, onPress }: { torchEnabled: boolean; onPress
       style={({ pressed }) => [styles.iconButton, pressed && { opacity: 0.5 }]}
       onPress={handlePress}
     >
-      {torchEnabled && (
-        <Animated.View style={[styles.flashGlow, glowStyle]} />
-      )}
+      {torchEnabled && <Animated.View style={[styles.flashGlow, glowStyle]} />}
       <FlashIcon on={torchEnabled} />
     </Pressable>
   );
@@ -186,10 +190,15 @@ export default function CameraScreen() {
     topicId?: string;
     startAt?: string;
     remainingMs?: string;
+    locationRequired?: string;
   }>();
   const topicId = params.topicId;
-  const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000 + 12 * 1000;
-  const startAt = params.startAt ?? new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
+  const remainingMs = params.remainingMs
+    ? parseInt(params.remainingMs, 10)
+    : 5 * 60 * 1000 + 12 * 1000;
+  const startAt =
+    params.startAt ??
+    new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
 
   useEffect(() => {
     if (facing === "front" && torchEnabled) {
@@ -243,6 +252,7 @@ export default function CameraScreen() {
           topicId,
           startAt,
           remainingMs: String(remainingMs),
+          locationRequired: params.locationRequired,
         },
       });
     } catch {
@@ -253,6 +263,7 @@ export default function CameraScreen() {
           topicId,
           startAt,
           remainingMs: String(remainingMs),
+          locationRequired: params.locationRequired,
         },
       });
     } finally {
@@ -292,7 +303,7 @@ export default function CameraScreen() {
           },
           { text: "キャンセル", style: "cancel" },
         ],
-        { cancelable: true }
+        { cancelable: true },
       );
     } else {
       router.dismissAll();
@@ -309,7 +320,10 @@ export default function CameraScreen() {
       {/* Cancel button */}
       <View style={styles.topBar}>
         <Pressable
-          style={({ pressed }) => [styles.cancelButton, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [
+            styles.cancelButton,
+            pressed && { opacity: 0.6 },
+          ]}
           onPress={handleCancel}
         >
           <Text style={styles.cancelText}>✕</Text>

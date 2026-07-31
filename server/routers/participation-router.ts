@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { DrizzleParticipationRepository } from "../repositories/participation-repository";
+import { DrizzleAppReviewConfigRepository } from "../repositories/app-review-config-repository";
 import {
   ParticipationService,
   ParticipationServiceError,
@@ -10,10 +11,21 @@ import { S3Storage } from "../storage/s3-storage";
 import { protectedProcedure, router } from "../_core/trpc";
 
 const participationRepository = new DrizzleParticipationRepository();
-const participationService = new ParticipationService(participationRepository);
+const appReviewConfigRepository = new DrizzleAppReviewConfigRepository();
+const participationService = new ParticipationService(
+  participationRepository,
+  undefined,
+  null,
+  appReviewConfigRepository,
+);
 
 function createCheckInService(): ParticipationService {
-  return new ParticipationService(participationRepository, undefined, new S3Storage());
+  return new ParticipationService(
+    participationRepository,
+    undefined,
+    new S3Storage(),
+    appReviewConfigRepository,
+  );
 }
 
 function toTrpcError(error: unknown): never {
@@ -27,19 +39,25 @@ function toTrpcError(error: unknown): never {
 }
 
 export const participationRouter = router({
-  current: protectedProcedure.query(({ ctx }) => participationService.getCurrent(ctx.user.id)),
-  checkOut: protectedProcedure.mutation(({ ctx }) => participationService.checkOut(ctx.user.id)),
+  current: protectedProcedure.query(({ ctx }) =>
+    participationService.getCurrent(ctx.user.id),
+  ),
+  checkOut: protectedProcedure.mutation(({ ctx }) =>
+    participationService.checkOut(ctx.user.id),
+  ),
   checkIn: protectedProcedure
     .input(
       z.object({
         topicId: z.number().int().positive(),
         imageStorageKey: z.string().min(1).max(1024),
         caption: z.string().max(20),
-        location: z.object({
-          latitude: z.number(),
-          longitude: z.number(),
-          accuracy: z.number(),
-        }),
+        location: z
+          .object({
+            latitude: z.number(),
+            longitude: z.number(),
+            accuracy: z.number(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

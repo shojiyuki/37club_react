@@ -9,15 +9,25 @@ export type ActiveParticipationRecord = {
 };
 
 export interface ParticipationRepository {
-  findActiveByUserId(userId: number): Promise<ActiveParticipationRecord | undefined>;
-  findByUserIdAndTopicId(userId: number, topicId: number): Promise<ActiveParticipationRecord | undefined>;
-  findTopicById(topicId: number): Promise<typeof topics.$inferSelect | undefined>;
-  findPostByImageStorageKey(imageStorageKey: string): Promise<typeof posts.$inferSelect | undefined>;
+  findActiveByUserId(
+    userId: number,
+  ): Promise<ActiveParticipationRecord | undefined>;
+  findByUserIdAndTopicId(
+    userId: number,
+    topicId: number,
+  ): Promise<ActiveParticipationRecord | undefined>;
+  findTopicById(
+    topicId: number,
+  ): Promise<typeof topics.$inferSelect | undefined>;
+  findPostByImageStorageKey(
+    imageStorageKey: string,
+  ): Promise<typeof posts.$inferSelect | undefined>;
   createActiveParticipation(input: {
     userId: number;
     topicId: number;
     imageStorageKey: string;
     caption: string;
+    checkedInAt: Date;
   }): Promise<ActiveParticipationRecord>;
   reactivateParticipation(input: {
     participationId: number;
@@ -31,7 +41,9 @@ export interface ParticipationRepository {
 }
 
 export class DrizzleParticipationRepository implements ParticipationRepository {
-  async findActiveByUserId(userId: number): Promise<ActiveParticipationRecord | undefined> {
+  async findActiveByUserId(
+    userId: number,
+  ): Promise<ActiveParticipationRecord | undefined> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
@@ -44,7 +56,12 @@ export class DrizzleParticipationRepository implements ParticipationRepository {
       .from(participations)
       .innerJoin(topics, eq(participations.topicId, topics.id))
       .innerJoin(posts, eq(participations.postId, posts.id))
-      .where(and(eq(participations.userId, userId), eq(participations.status, "active")))
+      .where(
+        and(
+          eq(participations.userId, userId),
+          eq(participations.status, "active"),
+        ),
+      )
       .limit(1);
 
     return result[0];
@@ -66,21 +83,34 @@ export class DrizzleParticipationRepository implements ParticipationRepository {
       .from(participations)
       .innerJoin(topics, eq(participations.topicId, topics.id))
       .innerJoin(posts, eq(participations.postId, posts.id))
-      .where(and(eq(participations.userId, userId), eq(participations.topicId, topicId)))
+      .where(
+        and(
+          eq(participations.userId, userId),
+          eq(participations.topicId, topicId),
+        ),
+      )
       .limit(1);
 
     return result[0];
   }
 
-  async findTopicById(topicId: number): Promise<typeof topics.$inferSelect | undefined> {
+  async findTopicById(
+    topicId: number,
+  ): Promise<typeof topics.$inferSelect | undefined> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
-    const result = await db.select().from(topics).where(eq(topics.id, topicId)).limit(1);
+    const result = await db
+      .select()
+      .from(topics)
+      .where(eq(topics.id, topicId))
+      .limit(1);
     return result[0];
   }
 
-  async findPostByImageStorageKey(imageStorageKey: string): Promise<typeof posts.$inferSelect | undefined> {
+  async findPostByImageStorageKey(
+    imageStorageKey: string,
+  ): Promise<typeof posts.$inferSelect | undefined> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
@@ -97,11 +127,12 @@ export class DrizzleParticipationRepository implements ParticipationRepository {
     topicId: number;
     imageStorageKey: string;
     caption: string;
+    checkedInAt: Date;
   }): Promise<ActiveParticipationRecord> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
-    const now = new Date();
+    const now = input.checkedInAt;
 
     return db.transaction(async (tx) => {
       const insertedPosts = await tx
@@ -218,16 +249,29 @@ export class DrizzleParticipationRepository implements ParticipationRepository {
     await db
       .update(participations)
       .set({ status: "expired" })
-      .where(and(eq(participations.id, participationId), eq(participations.status, "active")));
+      .where(
+        and(
+          eq(participations.id, participationId),
+          eq(participations.status, "active"),
+        ),
+      );
   }
 
-  async markCheckedOut(participationId: number, checkedOutAt: Date): Promise<void> {
+  async markCheckedOut(
+    participationId: number,
+    checkedOutAt: Date,
+  ): Promise<void> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
     await db
       .update(participations)
       .set({ status: "checked_out", checkedOutAt })
-      .where(and(eq(participations.id, participationId), eq(participations.status, "active")));
+      .where(
+        and(
+          eq(participations.id, participationId),
+          eq(participations.status, "active"),
+        ),
+      );
   }
 }

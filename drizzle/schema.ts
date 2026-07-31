@@ -1,4 +1,5 @@
 import {
+  boolean,
   double,
   index,
   int,
@@ -50,7 +51,10 @@ export const authAccounts = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (table) => [
-    uniqueIndex("auth_accounts_issuer_subject_unique").on(table.issuer, table.subject),
+    uniqueIndex("auth_accounts_issuer_subject_unique").on(
+      table.issuer,
+      table.subject,
+    ),
     index("auth_accounts_user_id_idx").on(table.userId),
   ],
 );
@@ -72,7 +76,10 @@ export const follows = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (table) => [
-    uniqueIndex("follows_follower_following_unique").on(table.followerUserId, table.followingUserId),
+    uniqueIndex("follows_follower_following_unique").on(
+      table.followerUserId,
+      table.followingUserId,
+    ),
     index("follows_follower_user_id_idx").on(table.followerUserId),
     index("follows_following_user_id_idx").on(table.followingUserId),
   ],
@@ -104,7 +111,10 @@ export const chatRoomMembers = mysqlTable(
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (table) => [
-    uniqueIndex("chat_room_members_room_user_unique").on(table.chatRoomId, table.userId),
+    uniqueIndex("chat_room_members_room_user_unique").on(
+      table.chatRoomId,
+      table.userId,
+    ),
     index("chat_room_members_room_id_idx").on(table.chatRoomId),
     index("chat_room_members_user_id_idx").on(table.userId),
   ],
@@ -149,11 +159,27 @@ export const topics = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  (table) => [index("topics_start_at_idx").on(table.startAt), index("topics_end_at_idx").on(table.endAt)],
+  (table) => [
+    index("topics_start_at_idx").on(table.startAt),
+    index("topics_end_at_idx").on(table.endAt),
+  ],
 );
 
 export type Topic = typeof topics.$inferSelect;
 export type InsertTopic = typeof topics.$inferInsert;
+
+export const appReviewConfig = mysqlTable("app_review_config", {
+  enabled: boolean("enabled").default(false).notNull(),
+  topicId: int("topicId")
+    .primaryKey()
+    .references(() => topics.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expiresAt").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AppReviewConfig = typeof appReviewConfig.$inferSelect;
+export type InsertAppReviewConfig = typeof appReviewConfig.$inferInsert;
 
 export const posts = mysqlTable(
   "posts",
@@ -193,14 +219,19 @@ export const participations = mysqlTable(
     postId: int("postId")
       .notNull()
       .references(() => posts.id, { onDelete: "restrict" }),
-    status: mysqlEnum("status", ["active", "checked_out", "expired"]).default("active").notNull(),
+    status: mysqlEnum("status", ["active", "checked_out", "expired"])
+      .default("active")
+      .notNull(),
     checkedInAt: timestamp("checkedInAt").defaultNow().notNull(),
     checkedOutAt: timestamp("checkedOutAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
   (table) => [
-    uniqueIndex("participations_user_topic_unique").on(table.userId, table.topicId),
+    uniqueIndex("participations_user_topic_unique").on(
+      table.userId,
+      table.topicId,
+    ),
     uniqueIndex("participations_post_id_unique").on(table.postId),
     index("participations_user_status_idx").on(table.userId, table.status),
     index("participations_topic_status_idx").on(table.topicId, table.status),

@@ -36,6 +36,7 @@ export interface Topic {
   lat: number;
   lng: number;
   items: string;
+  locationRequired: boolean;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -68,7 +69,10 @@ const PILL_RADIUS = 28;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function getLiveState(startAt: string): { isLive: boolean; remainingMs: number } {
+function getLiveState(startAt: string): {
+  isLive: boolean;
+  remainingMs: number;
+} {
   const start = new Date(startAt).getTime();
   const now = Date.now();
   const elapsed = now - start;
@@ -92,7 +96,8 @@ function getInitialIndex(topics: Topic[]): number {
     .filter((x) => x.isLive);
 
   if (liveTopics.length > 0) {
-    return liveTopics.reduce((a, b) => (a.remainingMs < b.remainingMs ? a : b)).i;
+    return liveTopics.reduce((a, b) => (a.remainingMs < b.remainingMs ? a : b))
+      .i;
   }
 
   const upcoming = topics
@@ -194,12 +199,14 @@ function HexIcon({ size = 16 }: { size?: number }) {
   const pts = Array.from({ length: 6 }, (_, i) => {
     const angle = (Math.PI / 180) * (60 * i - 30);
     return `${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`;
-  }).join(' ');
+  }).join(" ");
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d={`M ${pts.split(' ').map((p, i) => (i === 0 ? `M ${p}` : `L ${p}`)).join(' ')} Z`
-            .replace('M M ', 'M ')}
+        d={`M ${pts
+          .split(" ")
+          .map((p, i) => (i === 0 ? `M ${p}` : `L ${p}`))
+          .join(" ")} Z`.replace("M M ", "M ")}
         stroke={COLORS.neon}
         strokeWidth={1.8}
         strokeLinejoin="round"
@@ -228,13 +235,13 @@ function TopicCard({ topic, isLive, pinned, onTogglePin }: TopicCardProps) {
   }, [pinOpacity, pinned]);
 
   return (
-    <View style={[styles.cardGlowWrapper, isLive && styles.cardGlowWrapperLive]}>
+    <View
+      style={[styles.cardGlowWrapper, isLive && styles.cardGlowWrapperLive]}
+    >
       <View style={[styles.card, isLive ? styles.cardLive : styles.cardNormal]}>
         {/* 📌 Pin button — top-right */}
         <Pressable
-          style={[
-            styles.pinButton,
-          ]}
+          style={[styles.pinButton]}
           onPress={() => {
             if (Platform.OS !== "web") {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -287,10 +294,10 @@ function OutlinePillButton({
     glowOpacity.value = withRepeat(
       withSequence(
         withTiming(0.5, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.25, { duration: 1800, easing: Easing.inOut(Easing.ease) })
+        withTiming(0.25, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
-      false
+      false,
     );
   }, [glowOpacity]);
 
@@ -311,10 +318,7 @@ function OutlinePillButton({
       {/* Outer glow layer */}
       <Animated.View style={[styles.pillGlow, glowStyle]} />
       <Pressable
-        style={({ pressed }) => [
-          styles.pill,
-          pressed && styles.pillPressed,
-        ]}
+        style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
@@ -338,7 +342,9 @@ function HorizontalLine() {
 }
 
 function CountdownTimer({ startAt }: { startAt: string }) {
-  const [remainingMs, setRemainingMs] = useState(() => getLiveState(startAt).remainingMs);
+  const [remainingMs, setRemainingMs] = useState(
+    () => getLiveState(startAt).remainingMs,
+  );
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -396,7 +402,9 @@ export function TopicCarousel({
 
   const initialRealIndex = getInitialIndex(topics);
   // Start in the middle copy
-  const initialLoopIndex = canLoop ? COUNT + initialRealIndex : initialRealIndex;
+  const initialLoopIndex = canLoop
+    ? COUNT + initialRealIndex
+    : initialRealIndex;
 
   const [activeRealIndex, setActiveRealIndex] = useState(initialRealIndex);
   const flatListRef = useRef<FlatList>(null);
@@ -417,34 +425,47 @@ export function TopicCarousel({
   useEffect(() => {
     if (initialLoopIndex > 0) {
       setTimeout(() => {
-        flatListRef.current?.scrollToIndex({ index: initialLoopIndex, animated: false });
+        flatListRef.current?.scrollToIndex({
+          index: initialLoopIndex,
+          animated: false,
+        });
       }, 100);
     }
   }, [initialLoopIndex]);
 
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    const { canLoop: currentCanLoop, count } = loopStateRef.current;
-    if (viewableItems.length === 0 || viewableItems[0].index == null || count === 0) {
-      return;
-    }
-
-    const loopIdx = viewableItems[0].index;
-    const realIdx = currentCanLoop ? loopIdx % count : loopIdx;
-    setActiveRealIndex(realIdx);
-
-    // Loop: if we've scrolled into the first or last copy, jump to center
-    if (currentCanLoop && !isJumping.current) {
-      if (loopIdx < count || loopIdx >= count * 2) {
-        isJumping.current = true;
-        const targetIdx = count + realIdx;
-        // Use a tiny delay so the snap animation finishes first
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({ index: targetIdx, animated: false });
-          isJumping.current = false;
-        }, 50);
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const { canLoop: currentCanLoop, count } = loopStateRef.current;
+      if (
+        viewableItems.length === 0 ||
+        viewableItems[0].index == null ||
+        count === 0
+      ) {
+        return;
       }
-    }
-  }, []);
+
+      const loopIdx = viewableItems[0].index;
+      const realIdx = currentCanLoop ? loopIdx % count : loopIdx;
+      setActiveRealIndex(realIdx);
+
+      // Loop: if we've scrolled into the first or last copy, jump to center
+      if (currentCanLoop && !isJumping.current) {
+        if (loopIdx < count || loopIdx >= count * 2) {
+          isJumping.current = true;
+          const targetIdx = count + realIdx;
+          // Use a tiny delay so the snap animation finishes first
+          setTimeout(() => {
+            flatListRef.current?.scrollToIndex({
+              index: targetIdx,
+              animated: false,
+            });
+            isJumping.current = false;
+          }, 50);
+        }
+      }
+    },
+    [],
+  );
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
@@ -461,6 +482,7 @@ export function TopicCarousel({
         topicId: activeTopic.id,
         startAt: activeTopic.startAt,
         remainingMs: String(remainingMs),
+        locationRequired: String(activeTopic.locationRequired),
       },
     });
   };
@@ -479,7 +501,7 @@ export function TopicCarousel({
         </View>
       );
     },
-    [pinnedIds, onTogglePin]
+    [pinnedIds, onTogglePin],
   );
 
   const getItemLayout = useCallback(
@@ -488,13 +510,15 @@ export function TopicCarousel({
       offset: (CARD_WIDTH + CARD_GAP) * index,
       index,
     }),
-    []
+    [],
   );
 
   // ── PINNED filter icon (top-right of screen) ──────────────────────────────
   const filterPinGlow = useSharedValue(showPinnedOnly ? 0.7 : 0);
   useEffect(() => {
-    filterPinGlow.value = withTiming(showPinnedOnly ? 0.7 : 0, { duration: 200 });
+    filterPinGlow.value = withTiming(showPinnedOnly ? 0.7 : 0, {
+      duration: 200,
+    });
   }, [filterPinGlow, showPinnedOnly]);
 
   const filterGlowStyle = useAnimatedStyle(() => ({
@@ -503,7 +527,6 @@ export function TopicCarousel({
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-
       {/* 📌 Filter button — top-right corner, 32px below safe area top */}
       {onTogglePinnedFilter && (
         <Pressable

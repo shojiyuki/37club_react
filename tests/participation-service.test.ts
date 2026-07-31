@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Topic, Post, Participation } from "../drizzle/schema";
+import type {
+  AppReviewConfig,
+  Topic,
+  Post,
+  Participation,
+} from "../drizzle/schema";
+import type { AppReviewConfigRepository } from "../server/repositories/app-review-config-repository";
 import type {
   ActiveParticipationRecord,
   ParticipationRepository,
@@ -34,7 +40,37 @@ function createStorage(): Storage {
   };
 }
 
-function createRecord(overrides: Partial<ActiveParticipationRecord> = {}): ActiveParticipationRecord {
+function createAppReviewConfig(
+  overrides: Partial<AppReviewConfig> = {},
+): AppReviewConfig {
+  return {
+    enabled: true,
+    topicId: 20,
+    expiresAt: new Date("2026-07-09T12:00:00.000Z"),
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+function createAppReviewConfigRepository(
+  value?: AppReviewConfig | AppReviewConfig[],
+): AppReviewConfigRepository {
+  const configs = value ? (Array.isArray(value) ? value : [value]) : [];
+
+  return {
+    findAll: vi.fn().mockResolvedValue(configs),
+    findByTopicId: vi
+      .fn()
+      .mockImplementation(async (topicId: number) =>
+        configs.find((config) => config.topicId === topicId),
+      ),
+  };
+}
+
+function createRecord(
+  overrides: Partial<ActiveParticipationRecord> = {},
+): ActiveParticipationRecord {
   const participation: Participation = {
     id: 10,
     userId: 1,
@@ -200,7 +236,9 @@ describe("ParticipationService", () => {
     const record = createRecord();
     vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
     vi.mocked(repository.findTopicById).mockResolvedValue(record.topic);
-    vi.mocked(repository.findPostByImageStorageKey).mockResolvedValue(undefined);
+    vi.mocked(repository.findPostByImageStorageKey).mockResolvedValue(
+      undefined,
+    );
     vi.mocked(repository.createActiveParticipation).mockResolvedValue(record);
     vi.mocked(storage.getObjectMetadata).mockResolvedValue({
       key: "users/1/posts/photo.jpg",
@@ -234,6 +272,7 @@ describe("ParticipationService", () => {
       topicId: 20,
       imageStorageKey: "users/1/posts/photo.jpg",
       caption: "sample",
+      checkedInAt: now,
     });
   });
 
@@ -267,9 +306,15 @@ describe("ParticipationService", () => {
     });
     vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
     vi.mocked(repository.findTopicById).mockResolvedValue(existingRecord.topic);
-    vi.mocked(repository.findPostByImageStorageKey).mockResolvedValue(undefined);
-    vi.mocked(repository.findByUserIdAndTopicId).mockResolvedValue(existingRecord);
-    vi.mocked(repository.reactivateParticipation).mockResolvedValue(reactivatedRecord);
+    vi.mocked(repository.findPostByImageStorageKey).mockResolvedValue(
+      undefined,
+    );
+    vi.mocked(repository.findByUserIdAndTopicId).mockResolvedValue(
+      existingRecord,
+    );
+    vi.mocked(repository.reactivateParticipation).mockResolvedValue(
+      reactivatedRecord,
+    );
     vi.mocked(storage.getObjectMetadata).mockResolvedValue({
       key: "users/1/posts/new-photo.jpg",
       contentType: "image/jpeg",
@@ -308,14 +353,20 @@ describe("ParticipationService", () => {
       caption: "new",
       checkedInAt: now,
     });
-    expect(storage.deleteObject).toHaveBeenCalledWith("users/1/posts/old-photo.jpg");
+    expect(storage.deleteObject).toHaveBeenCalledWith(
+      "users/1/posts/old-photo.jpg",
+    );
   });
 
   it("rejects check-in when the image key does not belong to the user prefix", async () => {
     const repository = createRepository();
     vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
     vi.mocked(repository.findTopicById).mockResolvedValue(createRecord().topic);
-    const service = new ParticipationService(repository, () => now, createStorage());
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      createStorage(),
+    );
 
     await expect(
       service.checkIn(1, {
@@ -335,7 +386,11 @@ describe("ParticipationService", () => {
     const repository = createRepository();
     vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
     vi.mocked(repository.findTopicById).mockResolvedValue(createRecord().topic);
-    const service = new ParticipationService(repository, () => now, createStorage());
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      createStorage(),
+    );
 
     await expect(
       service.checkIn(1, {
@@ -348,6 +403,258 @@ describe("ParticipationService", () => {
           accuracy: 20,
         },
       }),
-    ).rejects.toMatchObject(new ParticipationServiceError("OUTSIDE_TOPIC_AREA"));
+    ).rejects.toMatchObject(
+      new ParticipationServiceError("OUTSIDE_TOPIC_AREA"),
+    );
+  });
+
+  it("requires location for a normal topic", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
+    vi.mocked(repository.findTopicById).mockResolvedValue(createRecord().topic);
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      createStorage(),
+    );
+
+    await expect(
+      service.checkIn(1, {
+        topicId: 20,
+        imageStorageKey: "users/1/posts/photo.jpg",
+        caption: "sample",
+      }),
+    ).rejects.toMatchObject(new ParticipationServiceError("INVALID_LOCATION"));
+  });
+
+  it("allows demo topic check-in without location or an active base topic window", async () => {
+    const repository = createRepository();
+    const storage = createStorage();
+    const demoRecord = createRecord({
+      participation: {
+        ...createRecord().participation,
+        checkedInAt: now,
+      },
+      topic: {
+        ...createRecord().topic,
+        startAt: new Date("2026-07-01T00:00:00.000Z"),
+        endAt: new Date("2026-07-01T00:37:00.000Z"),
+      },
+    });
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
+    vi.mocked(repository.findTopicById).mockResolvedValue(demoRecord.topic);
+    vi.mocked(repository.findPostByImageStorageKey).mockResolvedValue(
+      undefined,
+    );
+    vi.mocked(repository.createActiveParticipation).mockResolvedValue(
+      demoRecord,
+    );
+    vi.mocked(storage.getObjectMetadata).mockResolvedValue({
+      key: "users/1/posts/photo.jpg",
+      contentType: "image/jpeg",
+      contentLength: 1024,
+    });
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      storage,
+      createAppReviewConfigRepository(createAppReviewConfig()),
+    );
+
+    await expect(
+      service.checkIn(1, {
+        topicId: 20,
+        imageStorageKey: "users/1/posts/photo.jpg",
+        caption: "demo",
+      }),
+    ).resolves.toMatchObject({
+      participation: {
+        checkedInAt: "2026-07-08T12:00:00.000Z",
+      },
+      topic: {
+        startAt: "2026-07-08T12:00:00.000Z",
+        endAt: "2026-07-08T12:37:00.000Z",
+      },
+      expiresAt: "2026-07-08T12:37:00.000Z",
+      serverNow: "2026-07-08T12:00:00.000Z",
+    });
+    expect(repository.createActiveParticipation).toHaveBeenCalledWith({
+      userId: 1,
+      topicId: 20,
+      imageStorageKey: "users/1/posts/photo.jpg",
+      caption: "demo",
+      checkedInAt: now,
+    });
+  });
+
+  it("uses checkedInAt plus 37 minutes for an active demo participation", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(
+      createRecord({
+        topic: {
+          ...createRecord().topic,
+          endAt: new Date("2026-07-01T00:37:00.000Z"),
+        },
+      }),
+    );
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      null,
+      createAppReviewConfigRepository(createAppReviewConfig()),
+    );
+
+    await expect(service.getCurrent(1)).resolves.toMatchObject({
+      topic: {
+        startAt: "2026-07-08T11:30:00.000Z",
+        endAt: "2026-07-08T12:07:00.000Z",
+      },
+      expiresAt: "2026-07-08T12:07:00.000Z",
+    });
+    expect(repository.markExpired).not.toHaveBeenCalled();
+  });
+
+  it("expires a demo participation 37 minutes after check-in", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(
+      createRecord({
+        participation: {
+          ...createRecord().participation,
+          checkedInAt: new Date("2026-07-08T11:23:00.000Z"),
+        },
+      }),
+    );
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      null,
+      createAppReviewConfigRepository(createAppReviewConfig()),
+    );
+
+    await expect(service.getCurrent(1)).resolves.toMatchObject({
+      participation: null,
+      expiresAt: null,
+    });
+    expect(repository.markExpired).toHaveBeenCalledWith(10);
+  });
+
+  it("reactivates an expired demo participation with a new 37-minute window", async () => {
+    const repository = createRepository();
+    const storage = createStorage();
+    const expiredActiveRecord = createRecord({
+      participation: {
+        ...createRecord().participation,
+        checkedInAt: new Date("2026-07-08T11:23:00.000Z"),
+      },
+      topic: {
+        ...createRecord().topic,
+        startAt: new Date("2026-07-01T00:00:00.000Z"),
+        endAt: new Date("2026-07-01T00:37:00.000Z"),
+      },
+      post: {
+        ...createRecord().post,
+        imageStorageKey: "users/1/posts/old-photo.jpg",
+      },
+    });
+    const reactivatedRecord = createRecord({
+      participation: {
+        ...expiredActiveRecord.participation,
+        status: "active",
+        checkedInAt: now,
+      },
+      topic: expiredActiveRecord.topic,
+      post: {
+        ...expiredActiveRecord.post,
+        imageStorageKey: "users/1/posts/new-photo.jpg",
+      },
+    });
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(
+      expiredActiveRecord,
+    );
+    vi.mocked(repository.findTopicById).mockResolvedValue(
+      expiredActiveRecord.topic,
+    );
+    vi.mocked(repository.findPostByImageStorageKey).mockResolvedValue(
+      undefined,
+    );
+    vi.mocked(repository.findByUserIdAndTopicId).mockResolvedValue(
+      expiredActiveRecord,
+    );
+    vi.mocked(repository.reactivateParticipation).mockResolvedValue(
+      reactivatedRecord,
+    );
+    vi.mocked(storage.getObjectMetadata).mockResolvedValue({
+      key: "users/1/posts/new-photo.jpg",
+      contentType: "image/jpeg",
+      contentLength: 1024,
+    });
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      storage,
+      createAppReviewConfigRepository(createAppReviewConfig()),
+    );
+
+    await expect(
+      service.checkIn(1, {
+        topicId: 20,
+        imageStorageKey: "users/1/posts/new-photo.jpg",
+        caption: "again",
+      }),
+    ).resolves.toMatchObject({
+      participation: {
+        checkedInAt: "2026-07-08T12:00:00.000Z",
+      },
+      expiresAt: "2026-07-08T12:37:00.000Z",
+    });
+    expect(repository.markExpired).toHaveBeenCalledWith(10);
+    expect(repository.reactivateParticipation).toHaveBeenCalledWith({
+      participationId: 10,
+      postId: 30,
+      imageStorageKey: "users/1/posts/new-photo.jpg",
+      caption: "again",
+      checkedInAt: now,
+    });
+  });
+
+  it("rejects the configured demo topic when the config is disabled", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(undefined);
+    vi.mocked(repository.findTopicById).mockResolvedValue(createRecord().topic);
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      createStorage(),
+      createAppReviewConfigRepository(
+        createAppReviewConfig({ enabled: false }),
+      ),
+    );
+
+    await expect(
+      service.checkIn(1, {
+        topicId: 20,
+        imageStorageKey: "users/1/posts/photo.jpg",
+        caption: "demo",
+      }),
+    ).rejects.toMatchObject(new ParticipationServiceError("TOPIC_CLOSED"));
+  });
+
+  it("expires an active demo participation when the config expires", async () => {
+    const repository = createRepository();
+    vi.mocked(repository.findActiveByUserId).mockResolvedValue(createRecord());
+    const service = new ParticipationService(
+      repository,
+      () => now,
+      null,
+      createAppReviewConfigRepository(
+        createAppReviewConfig({ expiresAt: now }),
+      ),
+    );
+
+    await expect(service.getCurrent(1)).resolves.toMatchObject({
+      participation: null,
+      expiresAt: null,
+    });
+    expect(repository.markExpired).toHaveBeenCalledWith(10);
   });
 });

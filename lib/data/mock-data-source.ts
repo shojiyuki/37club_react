@@ -28,6 +28,7 @@ function buildMockTopics(): AppTopic[] {
       lat: 35.6595,
       lng: 139.7005,
       items: "赤いもの",
+      locationRequired: true,
     },
     {
       id: "2",
@@ -37,6 +38,7 @@ function buildMockTopics(): AppTopic[] {
       lat: 35.7119,
       lng: 139.771,
       items: "サングラス",
+      locationRequired: true,
     },
     {
       id: "3",
@@ -46,6 +48,7 @@ function buildMockTopics(): AppTopic[] {
       lat: 35.6586,
       lng: 139.7454,
       items: "白いTシャツ",
+      locationRequired: true,
     },
     {
       id: "4",
@@ -55,6 +58,7 @@ function buildMockTopics(): AppTopic[] {
       lat: 35.3193,
       lng: 139.5503,
       items: "本",
+      locationRequired: true,
     },
     {
       id: "5",
@@ -64,6 +68,7 @@ function buildMockTopics(): AppTopic[] {
       lat: 34.6873,
       lng: 135.5262,
       items: "帽子",
+      locationRequired: true,
     },
   ];
 }
@@ -85,7 +90,9 @@ function createEmptyCurrentParticipation(): CurrentParticipation {
   };
 }
 
-function createMockCurrentParticipation(input: CheckInParticipationInput): CurrentParticipation {
+function createMockCurrentParticipation(
+  input: CheckInParticipationInput,
+): CurrentParticipation {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 37 * 60 * 1000);
   return {
@@ -103,8 +110,8 @@ function createMockCurrentParticipation(input: CheckInParticipationInput): Curre
       startAt: now.toISOString(),
       endAt: expiresAt.toISOString(),
       locationName: "MOCK LOCATION",
-      latitude: input.location.latitude,
-      longitude: input.location.longitude,
+      latitude: input.location?.latitude ?? 0,
+      longitude: input.location?.longitude ?? 0,
       prompt: "MOCK TOPIC",
     },
     post: {
@@ -137,9 +144,8 @@ function getMockChatList(): AppChatListItem[] {
     }
   }
 
-  return MOCK_USERS
-    .filter((user) => user.followState === "mutual")
-    .map((user) => {
+  return MOCK_USERS.filter((user) => user.followState === "mutual").map(
+    (user) => {
       const history = MOCK_CHAT_BY_USER[user.id] ?? [];
       const last = history[history.length - 1];
       const lastMessage = last
@@ -155,7 +161,8 @@ function getMockChatList(): AppChatListItem[] {
         lastMessage,
         hasUnread: user.id === "u1",
       };
-    });
+    },
+  );
 }
 
 export const mockDataSources: DataSources = {
@@ -196,7 +203,9 @@ export const mockDataSources: DataSources = {
       return getMockChatList();
     },
     async messages(input: ChatMessagesInput): Promise<AppChatMessages> {
-      const user = MOCK_USERS.find((mockUser) => mockUser.id === input.targetUserId);
+      const user = MOCK_USERS.find(
+        (mockUser) => mockUser.id === input.targetUserId,
+      );
       return {
         targetUser: {
           id: input.targetUserId,

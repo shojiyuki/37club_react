@@ -6,8 +6,10 @@ type RouterInputs = inferRouterInputs<AppRouter>;
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 
 export type CurrentParticipation = RouterOutputs["participation"]["current"];
-export type CheckInParticipationInput = RouterInputs["participation"]["checkIn"];
-export type CreateUploadUrlResponse = RouterOutputs["storage"]["createUploadUrl"];
+export type CheckInParticipationInput =
+  RouterInputs["participation"]["checkIn"];
+export type CreateUploadUrlResponse =
+  RouterOutputs["storage"]["createUploadUrl"];
 export type DiscardUploadResponse = RouterOutputs["storage"]["discardUpload"];
 export type SetFollowingInput = {
   targetUserId: string;
@@ -90,6 +92,7 @@ export type AppTopic = {
   lat: number;
   lng: number;
   items: string;
+  locationRequired: boolean;
 };
 
 export interface DataSources {
@@ -114,7 +117,9 @@ export interface DataSources {
     sendMessage(input: SendChatMessageInput): Promise<AppChatMessage>;
   };
   storage: {
-    createUploadUrl(input: CreateUploadUrlInput): Promise<CreateUploadUrlResponse>;
+    createUploadUrl(
+      input: CreateUploadUrlInput,
+    ): Promise<CreateUploadUrlResponse>;
     discardUpload(input: DiscardUploadInput): Promise<DiscardUploadResponse>;
   };
 }

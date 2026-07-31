@@ -26,7 +26,10 @@ import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useParticipation } from "@/hooks/use-participation";
 import { useStorageUploadTarget } from "@/hooks/use-storage-upload";
 import { isMockDataSource } from "@/lib/data-source";
-import { loadUploadableImage, uploadImageToUrl } from "@/lib/storage/upload-image";
+import {
+  loadUploadableImage,
+  uploadImageToUrl,
+} from "@/lib/storage/upload-image";
 
 const COLORS = {
   bg: "#070812",
@@ -48,21 +51,35 @@ const PILL_HEIGHT = 56;
 const PILL_RADIUS = 28;
 
 const CHECK_IN_ERROR_MESSAGES: Record<string, string> = {
-  ACTIVE_PARTICIPATION_EXISTS: "すでに参加中のトピックがあります。先にCHECK OUTしてください。",
-  IMAGE_ALREADY_USED: "この写真はすでに使用されています。撮り直してもう一度お試しください。",
-  IMAGE_NOT_FOUND: "写真のアップロード確認に失敗しました。撮り直してもう一度お試しください。",
-  INVALID_IMAGE_CONTENT_TYPE: "この写真形式は使用できません。撮り直してもう一度お試しください。",
-  IMAGE_TOO_LARGE: "写真のサイズが大きすぎます。撮り直してもう一度お試しください。",
-  INVALID_IMAGE_KEY: "写真の保存先を確認できませんでした。撮り直してもう一度お試しください。",
-  INVALID_LOCATION: "現在地を正しく取得できませんでした。少し待ってからもう一度お試しください。",
-  LOCATION_TOO_INACCURATE: "位置情報の精度が低いためCHECK INできません。少し待ってからもう一度お試しください。",
-  OUTSIDE_TOPIC_AREA: "現在地がトピックの範囲外です。開催場所の近くでCHECK INしてください。",
-  TOPIC_CLOSED: "このトピックは終了しました。TOPから参加できるトピックを選び直してください。",
+  ACTIVE_PARTICIPATION_EXISTS:
+    "すでに参加中のトピックがあります。先にCHECK OUTしてください。",
+  IMAGE_ALREADY_USED:
+    "この写真はすでに使用されています。撮り直してもう一度お試しください。",
+  IMAGE_NOT_FOUND:
+    "写真のアップロード確認に失敗しました。撮り直してもう一度お試しください。",
+  INVALID_IMAGE_CONTENT_TYPE:
+    "この写真形式は使用できません。撮り直してもう一度お試しください。",
+  IMAGE_TOO_LARGE:
+    "写真のサイズが大きすぎます。撮り直してもう一度お試しください。",
+  INVALID_IMAGE_KEY:
+    "写真の保存先を確認できませんでした。撮り直してもう一度お試しください。",
+  INVALID_LOCATION:
+    "現在地を正しく取得できませんでした。少し待ってからもう一度お試しください。",
+  LOCATION_TOO_INACCURATE:
+    "位置情報の精度が低いためCHECK INできません。少し待ってからもう一度お試しください。",
+  OUTSIDE_TOPIC_AREA:
+    "現在地がトピックの範囲外です。開催場所の近くでCHECK INしてください。",
+  TOPIC_CLOSED:
+    "このトピックは終了しました。TOPから参加できるトピックを選び直してください。",
   TOPIC_NOT_FOUND: "トピックが見つかりません。TOPから入り直してください。",
-  TOPIC_NOT_STARTED: "このトピックはまだ開始していません。開始時間になってからCHECK INしてください。",
-  "Location permission was denied": "位置情報の許可が必要です。端末の設定で位置情報を許可してからもう一度お試しください。",
-  "Topic ID is missing": "トピック情報を確認できませんでした。TOPから入り直してください。",
-  "Image URI is required": "写真を確認できませんでした。撮り直してもう一度お試しください。",
+  TOPIC_NOT_STARTED:
+    "このトピックはまだ開始していません。開始時間になってからCHECK INしてください。",
+  "Location permission was denied":
+    "位置情報の許可が必要です。端末の設定で位置情報を許可してからもう一度お試しください。",
+  "Topic ID is missing":
+    "トピック情報を確認できませんでした。TOPから入り直してください。",
+  "Image URI is required":
+    "写真を確認できませんでした。撮り直してもう一度お試しください。",
 };
 
 function getCheckInErrorMessage(error: unknown): string {
@@ -99,18 +116,25 @@ async function getCurrentCheckInLocation() {
 export default function PreviewScreen() {
   const insets = useSafeAreaInsets();
   const { checkIn, isCheckingIn } = useParticipation();
-  const { createUploadUrl, discardUpload, isCreatingUploadUrl } = useStorageUploadTarget();
+  const { createUploadUrl, discardUpload, isCreatingUploadUrl } =
+    useStorageUploadTarget();
   const params = useLocalSearchParams<{
     uri?: string;
     topicId?: string;
     startAt?: string;
     remainingMs?: string;
+    locationRequired?: string;
   }>();
 
   const uri = params.uri ?? "";
   const topicId = params.topicId ? parseInt(params.topicId, 10) : null;
-  const remainingMs = params.remainingMs ? parseInt(params.remainingMs, 10) : 5 * 60 * 1000;
-  const startAt = params.startAt ?? new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
+  const remainingMs = params.remainingMs
+    ? parseInt(params.remainingMs, 10)
+    : 5 * 60 * 1000;
+  const startAt =
+    params.startAt ??
+    new Date(Date.now() - (37 * 60 * 1000 - remainingMs)).toISOString();
+  const locationRequired = params.locationRequired !== "false";
 
   const [caption, setCaption] = useState("");
   const [postError, setPostError] = useState<string | null>(null);
@@ -124,10 +148,10 @@ export default function PreviewScreen() {
     glowOpacity.value = withRepeat(
       withSequence(
         withTiming(0.5, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.25, { duration: 1800, easing: Easing.inOut(Easing.ease) })
+        withTiming(0.25, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
       ),
       -1,
-      false
+      false,
     );
   }, [glowOpacity]);
 
@@ -158,7 +182,7 @@ export default function PreviewScreen() {
         throw new Error("Topic ID is missing");
       }
       if (isMockMode) {
-        await checkIn({
+        const current = await checkIn({
           topicId,
           imageStorageKey: `mock/users/me/posts/${Date.now()}.png`,
           caption,
@@ -168,13 +192,27 @@ export default function PreviewScreen() {
             accuracy: 10,
           },
         });
+        const confirmedStartAt = current.topic?.startAt ?? startAt;
+        const confirmedRemainingMs =
+          current.expiresAt && current.serverNow
+            ? Math.max(
+                0,
+                new Date(current.expiresAt).getTime() -
+                  new Date(current.serverNow).getTime(),
+              )
+            : remainingMs;
         router.push({
           pathname: "/check-in/posting" as any,
-          params: { startAt, remainingMs: String(remainingMs) },
+          params: {
+            startAt: confirmedStartAt,
+            remainingMs: String(confirmedRemainingMs),
+          },
         });
         return;
       }
-      const location = await getCurrentCheckInLocation();
+      const location = locationRequired
+        ? await getCurrentCheckInLocation()
+        : undefined;
       const image = await loadUploadableImage(uri);
       const uploadTarget = await createUploadUrl({
         contentType: image.contentType,
@@ -185,15 +223,27 @@ export default function PreviewScreen() {
         image,
       });
       uploadedImageStorageKey = uploadTarget.imageStorageKey;
-      await checkIn({
+      const current = await checkIn({
         topicId,
         imageStorageKey: uploadTarget.imageStorageKey,
         caption,
         location,
       });
+      const confirmedStartAt = current.topic?.startAt ?? startAt;
+      const confirmedRemainingMs =
+        current.expiresAt && current.serverNow
+          ? Math.max(
+              0,
+              new Date(current.expiresAt).getTime() -
+                new Date(current.serverNow).getTime(),
+            )
+          : remainingMs;
       router.push({
         pathname: "/check-in/posting" as any,
-        params: { startAt, remainingMs: String(remainingMs) },
+        params: {
+          startAt: confirmedStartAt,
+          remainingMs: String(confirmedRemainingMs),
+        },
       });
     } catch (error) {
       console.error("[check-in preview] failed", error);
@@ -201,7 +251,10 @@ export default function PreviewScreen() {
         try {
           await discardUpload({ imageStorageKey: uploadedImageStorageKey });
         } catch (discardError) {
-          console.warn("[check-in preview] discard upload failed", discardError);
+          console.warn(
+            "[check-in preview] discard upload failed",
+            discardError,
+          );
         }
       }
       setPostError(getCheckInErrorMessage(error));
@@ -222,11 +275,7 @@ export default function PreviewScreen() {
         <View style={styles.imageGlowWrapper}>
           <View style={styles.imageWrapper}>
             {uri ? (
-              <Image
-                source={{ uri }}
-                style={styles.image}
-                contentFit="cover"
-              />
+              <Image source={{ uri }} style={styles.image} contentFit="cover" />
             ) : (
               <View style={styles.imagePlaceholder}>
                 <Text style={styles.placeholderText}>📷</Text>
@@ -273,7 +322,10 @@ export default function PreviewScreen() {
 
         {/* RETAKE — small outline button below */}
         <Pressable
-          style={({ pressed }) => [styles.retakeButton, pressed && { opacity: 0.5 }]}
+          style={({ pressed }) => [
+            styles.retakeButton,
+            pressed && { opacity: 0.5 },
+          ]}
           onPress={handleRetake}
         >
           <Text style={styles.retakeText}>RETAKE</Text>
