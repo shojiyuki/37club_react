@@ -11,7 +11,13 @@ import {
   createSecurityHeadersMiddleware,
   getBodyLimit,
 } from "./http-hardening";
-import { createRequestLoggingMiddleware, getRequestId, logServerEvent } from "./server-logger";
+import {
+  createRequestLoggingMiddleware,
+  getRequestId,
+  logServerEvent,
+} from "./server-logger";
+import { createTopicManagementAuthMiddleware } from "../topic-management/topic-management-auth";
+import { createTopicManagementHandler } from "../topic-management/topic-management-handler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -51,6 +57,12 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  app.post(
+    "/api/internal/topic-management",
+    createTopicManagementAuthMiddleware(),
+    createTopicManagementHandler(),
+  );
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -62,7 +74,8 @@ async function startServer() {
           procedure: path,
           procedure_type: type,
           error_code: error.code,
-          error_name: error.cause instanceof Error ? error.cause.name : error.name,
+          error_name:
+            error.cause instanceof Error ? error.cause.name : error.name,
         });
       },
     }),
@@ -90,7 +103,10 @@ async function startServer() {
   const port = await findAvailablePort(preferredPort);
 
   if (port !== preferredPort) {
-    logServerEvent("warn", "api_port_fallback", { preferred_port: preferredPort, port });
+    logServerEvent("warn", "api_port_fallback", {
+      preferred_port: preferredPort,
+      port,
+    });
   }
 
   server.listen(port, () => {
