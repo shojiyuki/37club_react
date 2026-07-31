@@ -34,6 +34,12 @@ function createRepository(records: TopicRecord[]): TopicsRepository {
         records.find((record) => record.id === topicId),
       ),
     findCurrentAndUpcoming: vi.fn().mockResolvedValue(records),
+    create: vi.fn().mockImplementation(async (input) =>
+      createTopic({
+        id: 10,
+        ...input,
+      }),
+    ),
   };
 }
 
@@ -91,5 +97,34 @@ describe("TopicManagementService", () => {
     await expect(
       service.select({ action: "select", topicId: 999 }),
     ).rejects.toEqual(new TopicManagementTopicNotFoundError(999));
+  });
+
+  it("creates a Topic with an end time exactly 37 minutes after start", async () => {
+    const repository = createRepository([]);
+    const service = new TopicManagementService(repository, () => NOW);
+
+    const result = await service.insert({
+      action: "insert",
+      topic: {
+        startAt: "2026-08-10T19:00:00+09:00",
+        locationName: "阿佐ヶ谷",
+        latitude: 35.704053,
+        longitude: 139.63553,
+        prompt: "今日いちばん印象に残ったこと",
+      },
+    });
+
+    expect(repository.create).toHaveBeenCalledWith({
+      startAt: new Date("2026-08-10T10:00:00.000Z"),
+      endAt: new Date("2026-08-10T10:37:00.000Z"),
+      locationName: "阿佐ヶ谷",
+      latitude: 35.704053,
+      longitude: 139.63553,
+      prompt: "今日いちばん印象に残ったこと",
+    });
+    expect(result.action).toBe("insert");
+    expect(result.topic.topicId).toBe(10);
+    expect(result.topic.startAtJst).toBe("2026-08-10T19:00:00+09:00");
+    expect(result.topic.endAtJst).toBe("2026-08-10T19:37:00+09:00");
   });
 });

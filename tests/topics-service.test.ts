@@ -33,6 +33,7 @@ function createRepository(records: TopicRecord[] = []): TopicsRepository {
       .mockImplementation(async (topicId: number) =>
         records.find((record) => record.id === topicId),
       ),
+    create: vi.fn(),
   };
 }
 

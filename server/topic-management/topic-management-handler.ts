@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 
 import { DrizzleTopicsRepository } from "../repositories/topics-repository";
-import { topicManagementSelectInputSchema } from "./topic-management-schema";
+import { topicManagementInputSchema } from "./topic-management-schema";
 import {
   TopicManagementService,
   TopicManagementTopicNotFoundError,
@@ -11,7 +11,7 @@ export function createTopicManagementHandler(
   service = new TopicManagementService(new DrizzleTopicsRepository()),
 ): RequestHandler {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const parsedInput = topicManagementSelectInputSchema.safeParse(req.body);
+    const parsedInput = topicManagementInputSchema.safeParse(req.body);
     if (!parsedInput.success) {
       res.status(400).json({
         ok: false,
@@ -25,7 +25,10 @@ export function createTopicManagementHandler(
     }
 
     try {
-      const result = await service.select(parsedInput.data);
+      const result =
+        parsedInput.data.action === "select"
+          ? await service.select(parsedInput.data)
+          : await service.insert(parsedInput.data);
       res.json({ ok: true, ...result });
     } catch (error) {
       if (error instanceof TopicManagementTopicNotFoundError) {

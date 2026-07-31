@@ -2,7 +2,10 @@ import type {
   TopicRecord,
   TopicsRepository,
 } from "../repositories/topics-repository";
-import type { TopicManagementSelectInput } from "./topic-management-schema";
+import type {
+  TopicManagementInsertInput,
+  TopicManagementSelectInput,
+} from "./topic-management-schema";
 
 export type ManagedTopic = {
   topicId: number;
@@ -22,6 +25,11 @@ export type TopicManagementSelectResult = {
   action: "select";
   count: number;
   topics: ManagedTopic[];
+};
+
+export type TopicManagementInsertResult = {
+  action: "insert";
+  topic: ManagedTopic;
 };
 
 type Clock = () => Date;
@@ -96,6 +104,26 @@ export class TopicManagementService {
       action: "select",
       count: selectedRecords.length,
       topics: selectedRecords.map(toManagedTopic),
+    };
+  }
+
+  async insert(
+    input: TopicManagementInsertInput,
+  ): Promise<TopicManagementInsertResult> {
+    const startAt = new Date(input.topic.startAt);
+    const endAt = new Date(startAt.getTime() + 37 * 60 * 1000);
+    const record = await this.repository.create({
+      startAt,
+      endAt,
+      locationName: input.topic.locationName,
+      latitude: input.topic.latitude,
+      longitude: input.topic.longitude,
+      prompt: input.topic.prompt,
+    });
+
+    return {
+      action: "insert",
+      topic: toManagedTopic(record),
     };
   }
 }
