@@ -1,18 +1,26 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { DrizzleBlockRepository } from "../repositories/block-repository";
 import { DrizzleFollowRepository } from "../repositories/follow-repository";
 import { FollowService, FollowServiceError } from "../services/follow-service";
 import { protectedProcedure, router } from "../_core/trpc";
 
 function createFollowService(): FollowService {
-  return new FollowService(new DrizzleFollowRepository());
+  return new FollowService(
+    new DrizzleFollowRepository(),
+    new DrizzleBlockRepository(),
+  );
 }
 
 function toTrpcError(error: unknown): never {
   if (error instanceof FollowServiceError) {
     throw new TRPCError({
-      code: error.code === "NOT_ACTIVE_IN_SAME_TOPIC" ? "FORBIDDEN" : "BAD_REQUEST",
+      code:
+        error.code === "NOT_ACTIVE_IN_SAME_TOPIC" ||
+        error.code === "USER_BLOCKED"
+          ? "FORBIDDEN"
+          : "BAD_REQUEST",
       message: error.code,
     });
   }

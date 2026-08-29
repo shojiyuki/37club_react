@@ -3,6 +3,7 @@ import type {
   MyCurrentPostRecord,
   PostsRepository,
 } from "../repositories/posts-repository";
+import type { BlockRepository } from "../repositories/block-repository";
 import type { FollowRepository } from "../repositories/follow-repository";
 import type { Storage } from "../storage/storage";
 
@@ -32,12 +33,20 @@ export class PostsService {
   constructor(
     private readonly repository: PostsRepository,
     private readonly storage: Storage,
-    private readonly followRepository: FollowRepository | null = null,
+    private readonly followRepository: FollowRepository,
+    private readonly blockRepository: BlockRepository,
   ) {}
 
   async listCurrentTopicPosts(userId: number): Promise<PostListItemResponse[]> {
     const records = await this.repository.findCurrentTopicPosts(userId);
-    return Promise.all(records.map((record) => this.toPostListItem(userId, record)));
+    const counterpartyUserIds = new Set(
+      await this.blockRepository.listCounterpartyUserIds(userId),
+    );
+    return Promise.all(
+      records
+        .filter((record) => !counterpartyUserIds.has(record.user.id))
+        .map((record) => this.toPostListItem(userId, record)),
+    );
   }
 
   async getMyCurrentPost(userId: number): Promise<MyPostResponse> {
@@ -58,7 +67,9 @@ export class PostsService {
     viewerUserId: number,
     record: CurrentTopicPostRecord,
   ): Promise<PostListItemResponse> {
-    const imageUri = await this.storage.createReadUrl(record.post.imageStorageKey);
+    const imageUri = await this.storage.createReadUrl(
+      record.post.imageStorageKey,
+    );
     return {
       id: String(record.post.id),
       user: {
@@ -73,22 +84,33 @@ export class PostsService {
     };
   }
 
-  private async getFollowState(viewerUserId: number, authorUserId: number): Promise<FollowState> {
-    if (!this.followRepository || viewerUserId === authorUserId) {
+  private async getFollowState(
+    viewerUserId: number,
+    authorUserId: number,
+  ): Promise<FollowState> {
+    if (viewerUserId === authorUserId) {
       return "none";
     }
 
-    const viewerFollowsAuthor = await this.followRepository.isFollowing(viewerUserId, authorUserId);
+    const viewerFollowsAuthor = await this.followRepository.isFollowing(
+      viewerUserId,
+      authorUserId,
+    );
     if (!viewerFollowsAuthor) {
       return "none";
     }
 
-    const authorFollowsViewer = await this.followRepository.isFollowing(authorUserId, viewerUserId);
+    const authorFollowsViewer = await this.followRepository.isFollowing(
+      authorUserId,
+      viewerUserId,
+    );
     return authorFollowsViewer ? "mutual" : "following";
   }
 
   private async toMyPost(record: MyCurrentPostRecord): Promise<MyPostResponse> {
-    const imageUri = await this.storage.createReadUrl(record.post.imageStorageKey);
+    const imageUri = await this.storage.createReadUrl(
+      record.post.imageStorageKey,
+    );
     return {
       imageUri,
       caption: record.post.caption,

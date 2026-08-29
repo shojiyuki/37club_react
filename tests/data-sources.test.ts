@@ -45,6 +45,22 @@ vi.mock("../lib/trpc", () => ({
         mutate: vi.fn(),
       },
     },
+    reports: {
+      create: {
+        mutate: vi.fn(),
+      },
+    },
+    blocks: {
+      list: {
+        query: vi.fn(),
+      },
+      create: {
+        mutate: vi.fn(),
+      },
+      remove: {
+        mutate: vi.fn(),
+      },
+    },
     chat: {
       list: {
         query: vi.fn(),
@@ -62,13 +78,16 @@ vi.mock("../lib/trpc", () => ({
 import { mockDataSources } from "../lib/data/mock-data-source";
 import { createServerDataSources } from "../lib/data/server-data-source";
 import type {
+  AppBlockedUser,
   AppChatListItem,
   AppChatMessage,
   AppChatMessages,
   AppMyPost,
   AppPost,
+  AppReportResult,
   AppTopic,
   CheckInParticipationInput,
+  CreateReportInput,
   CreateUploadUrlResponse,
   CurrentParticipation,
   SetFollowingResponse,
@@ -84,9 +103,27 @@ function createCurrentParticipation(): CurrentParticipation {
   };
 }
 
-function createPostDependencies() {
-  return {
+type TestDependencies = Parameters<typeof createServerDataSources>[0];
+
+function createDependencies(
+  overrides: Partial<TestDependencies> = {},
+): TestDependencies {
+  const defaults: TestDependencies = {
     getTopics: vi.fn().mockResolvedValue([] satisfies AppTopic[]),
+    getCurrentParticipation: vi
+      .fn()
+      .mockResolvedValue(createCurrentParticipation()),
+    checkInParticipation: vi
+      .fn()
+      .mockResolvedValue(createCurrentParticipation()),
+    checkOutParticipation: vi
+      .fn()
+      .mockResolvedValue(createCurrentParticipation()),
+    createUploadUrl: vi.fn().mockResolvedValue({
+      imageStorageKey: "users/1/posts/test.jpg",
+      uploadUrl: "https://example.test/upload",
+      expiresAt: "2026-08-29T00:05:00.000Z",
+    } satisfies CreateUploadUrlResponse),
     getPosts: vi.fn().mockResolvedValue([] satisfies AppPost[]),
     getMyPost: vi.fn().mockResolvedValue({
       imageUri: null,
@@ -110,7 +147,25 @@ function createPostDependencies() {
     } satisfies AppChatMessage),
     listPostComments: vi.fn().mockResolvedValue([]),
     createPostComment: vi.fn(),
+    createReport: vi.fn().mockResolvedValue({
+      id: 1,
+      targetType: "post",
+      targetId: 11,
+      status: "pending",
+      createdAt: "2026-08-29T00:00:00.000Z",
+    }),
+    listBlocks: vi.fn().mockResolvedValue([]),
+    createBlock: vi.fn().mockResolvedValue({
+      userId: 2,
+      name: "user_2",
+      blockedAt: "2026-08-29T00:00:00.000Z",
+    }),
+    removeBlock: vi.fn().mockResolvedValue({
+      targetUserId: 2,
+      removed: true,
+    }),
   };
+  return { ...defaults, ...overrides };
 }
 
 describe("participation data sources", () => {
@@ -167,21 +222,15 @@ describe("participation data sources", () => {
     ];
     const current = createCurrentParticipation();
     const getTopics = vi.fn().mockResolvedValue(topics);
-    const sources = createServerDataSources({
-      getTopics,
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      getPosts: vi.fn(),
-      getMyPost: vi.fn(),
-      setFollowing: vi.fn(),
-      getChatList: vi.fn(),
-      getChatMessages: vi.fn(),
-      sendChatMessage: vi.fn(),
-      listPostComments: vi.fn(),
-      createPostComment: vi.fn(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getTopics,
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+      }),
+    );
 
     await expect(sources.topics.getAll()).resolves.toBe(topics);
     expect(getTopics).toHaveBeenCalledOnce();
@@ -191,13 +240,14 @@ describe("participation data sources", () => {
     const current = createCurrentParticipation();
     const getCurrent = vi.fn().mockResolvedValue(current);
     const checkOut = vi.fn().mockResolvedValue(current);
-    const sources = createServerDataSources({
-      getCurrentParticipation: getCurrent,
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: checkOut,
-      createUploadUrl: vi.fn(),
-      ...createPostDependencies(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: getCurrent,
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: checkOut,
+        createUploadUrl: vi.fn(),
+      }),
+    );
 
     await expect(sources.participation.getCurrent()).resolves.toBe(current);
     expect(getCurrent).toHaveBeenCalledOnce();
@@ -231,13 +281,14 @@ describe("participation data sources", () => {
   it("delegates check-in to the server client", async () => {
     const current = createCurrentParticipation();
     const checkIn = vi.fn().mockResolvedValue(current);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: checkIn,
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      ...createPostDependencies(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: checkIn,
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+      }),
+    );
 
     await expect(sources.participation.checkIn(checkInInput)).resolves.toBe(
       current,
@@ -260,13 +311,14 @@ describe("participation data sources", () => {
     const current = createCurrentParticipation();
     const getCurrent = vi.fn().mockResolvedValue(current);
     const checkOut = vi.fn().mockResolvedValue(current);
-    const sources = createServerDataSources({
-      getCurrentParticipation: getCurrent,
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: checkOut,
-      createUploadUrl: vi.fn(),
-      ...createPostDependencies(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: getCurrent,
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: checkOut,
+        createUploadUrl: vi.fn(),
+      }),
+    );
 
     await expect(sources.participation.checkOut()).resolves.toBe(current);
     expect(checkOut).toHaveBeenCalledOnce();
@@ -293,13 +345,14 @@ describe("participation data sources", () => {
     };
     const current = createCurrentParticipation();
     const createUploadUrl = vi.fn().mockResolvedValue(uploadTarget);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl,
-      ...createPostDependencies(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl,
+      }),
+    );
     const input = {
       contentType: "image/jpeg" as const,
       contentLength: 1024,
@@ -322,14 +375,15 @@ describe("participation data sources", () => {
   it("delegates upload discard to the server client", async () => {
     const current = createCurrentParticipation();
     const discardUpload = vi.fn().mockResolvedValue({ discarded: true });
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      discardUpload,
-      ...createPostDependencies(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+        discardUpload,
+      }),
+    );
     const input = { imageStorageKey: "users/1/posts/orphan.png" };
 
     await expect(sources.storage.discardUpload(input)).resolves.toEqual({
@@ -364,21 +418,15 @@ describe("participation data sources", () => {
     ];
     const current = createCurrentParticipation();
     const getPosts = vi.fn().mockResolvedValue(posts);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      getTopics: vi.fn(),
-      getPosts,
-      getMyPost: vi.fn(),
-      setFollowing: vi.fn(),
-      getChatList: vi.fn(),
-      getChatMessages: vi.fn(),
-      sendChatMessage: vi.fn(),
-      listPostComments: vi.fn(),
-      createPostComment: vi.fn(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+        getPosts,
+      }),
+    );
 
     await expect(sources.posts.getAll()).resolves.toBe(posts);
     expect(getPosts).toHaveBeenCalledOnce();
@@ -393,21 +441,15 @@ describe("participation data sources", () => {
     };
     const current = createCurrentParticipation();
     const getMyPost = vi.fn().mockResolvedValue(myPost);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      getTopics: vi.fn(),
-      getPosts: vi.fn(),
-      getMyPost,
-      setFollowing: vi.fn(),
-      getChatList: vi.fn(),
-      getChatMessages: vi.fn(),
-      sendChatMessage: vi.fn(),
-      listPostComments: vi.fn(),
-      createPostComment: vi.fn(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+        getMyPost,
+      }),
+    );
 
     await expect(sources.posts.getMyPost()).resolves.toBe(myPost);
     expect(getMyPost).toHaveBeenCalledOnce();
@@ -420,21 +462,15 @@ describe("participation data sources", () => {
       followState: "following",
     };
     const setFollowing = vi.fn().mockResolvedValue(response);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      getTopics: vi.fn(),
-      getPosts: vi.fn(),
-      getMyPost: vi.fn(),
-      setFollowing,
-      getChatList: vi.fn(),
-      getChatMessages: vi.fn(),
-      sendChatMessage: vi.fn(),
-      listPostComments: vi.fn(),
-      createPostComment: vi.fn(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+        setFollowing,
+      }),
+    );
     const input = { targetUserId: "2", following: true };
 
     await expect(sources.follow.setFollowing(input)).resolves.toBe(response);
@@ -465,14 +501,15 @@ describe("participation data sources", () => {
       },
     ];
     const getChatList = vi.fn().mockResolvedValue(chatUsers);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      ...createPostDependencies(),
-      getChatList,
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+        getChatList,
+      }),
+    );
 
     await expect(sources.chat.list()).resolves.toBe(chatUsers);
     expect(getChatList).toHaveBeenCalledOnce();
@@ -485,14 +522,15 @@ describe("participation data sources", () => {
       messages: [{ id: "1", senderId: "me", text: "hello" }],
     };
     const getChatMessages = vi.fn().mockResolvedValue(messages);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      ...createPostDependencies(),
-      getChatMessages,
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+        getChatMessages,
+      }),
+    );
 
     await expect(sources.chat.messages({ targetUserId: "2" })).resolves.toBe(
       messages,
@@ -504,14 +542,15 @@ describe("participation data sources", () => {
     const current = createCurrentParticipation();
     const message: AppChatMessage = { id: "1", senderId: "me", text: "hello" };
     const sendChatMessage = vi.fn().mockResolvedValue(message);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi.fn().mockResolvedValue(current),
-      checkInParticipation: vi.fn().mockResolvedValue(current),
-      checkOutParticipation: vi.fn().mockResolvedValue(current),
-      createUploadUrl: vi.fn(),
-      ...createPostDependencies(),
-      sendChatMessage,
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi.fn().mockResolvedValue(current),
+        checkInParticipation: vi.fn().mockResolvedValue(current),
+        checkOutParticipation: vi.fn().mockResolvedValue(current),
+        createUploadUrl: vi.fn(),
+        sendChatMessage,
+      }),
+    );
     const input = { targetUserId: "2", body: "hello" };
 
     await expect(sources.chat.sendMessage(input)).resolves.toBe(message);
@@ -553,17 +592,18 @@ describe("participation data sources", () => {
         createdAt: "2026-08-29T00:00:00.000Z",
       },
     ]);
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi
-        .fn()
-        .mockResolvedValue(createCurrentParticipation()),
-      checkInParticipation: vi.fn(),
-      checkOutParticipation: vi.fn(),
-      createUploadUrl: vi.fn(),
-      ...createPostDependencies(),
-      listPostComments,
-      createPostComment: vi.fn(),
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi
+          .fn()
+          .mockResolvedValue(createCurrentParticipation()),
+        checkInParticipation: vi.fn(),
+        checkOutParticipation: vi.fn(),
+        createUploadUrl: vi.fn(),
+        listPostComments,
+        createPostComment: vi.fn(),
+      }),
+    );
 
     await expect(sources.postComments.list({ postId: "11" })).resolves.toEqual([
       {
@@ -585,17 +625,18 @@ describe("participation data sources", () => {
       body: "  hello  ",
       createdAt: "2026-08-29T00:01:00.000Z",
     });
-    const sources = createServerDataSources({
-      getCurrentParticipation: vi
-        .fn()
-        .mockResolvedValue(createCurrentParticipation()),
-      checkInParticipation: vi.fn(),
-      checkOutParticipation: vi.fn(),
-      createUploadUrl: vi.fn(),
-      ...createPostDependencies(),
-      listPostComments: vi.fn(),
-      createPostComment,
-    });
+    const sources = createServerDataSources(
+      createDependencies({
+        getCurrentParticipation: vi
+          .fn()
+          .mockResolvedValue(createCurrentParticipation()),
+        checkInParticipation: vi.fn(),
+        checkOutParticipation: vi.fn(),
+        createUploadUrl: vi.fn(),
+        listPostComments: vi.fn(),
+        createPostComment,
+      }),
+    );
 
     await expect(
       sources.postComments.create({ postId: "11", body: "  hello  " }),
@@ -604,5 +645,200 @@ describe("participation data sources", () => {
       postId: 11,
       body: "  hello  ",
     });
+  });
+
+  it("converts report and block IDs to app strings", async () => {
+    const now = "2026-08-29T00:00:00.000Z";
+    const createReport = vi.fn().mockResolvedValue({
+      id: 5,
+      targetType: "post",
+      targetId: 11,
+      status: "pending",
+      createdAt: now,
+    });
+    const listBlocks = vi.fn().mockResolvedValue([
+      { userId: 2, name: "user_2", blockedAt: now },
+    ]);
+    const createBlock = vi.fn().mockResolvedValue({
+      userId: 2,
+      name: "user_2",
+      blockedAt: now,
+    });
+    const removeBlock = vi.fn().mockResolvedValue({
+      targetUserId: 2,
+      removed: true,
+    });
+    const sources = createServerDataSources(
+      createDependencies({
+        createReport,
+        listBlocks,
+        createBlock,
+        removeBlock,
+      }),
+    );
+
+    await expect(
+      sources.reports.create({
+        targetType: "post",
+        targetId: "11",
+        reason: "spam",
+      }),
+    ).resolves.toEqual({
+      id: "5",
+      targetType: "post",
+      targetId: "11",
+      status: "pending",
+      createdAt: now,
+    } satisfies AppReportResult);
+    expect(createReport).toHaveBeenCalledWith({
+      targetType: "post",
+      targetId: 11,
+      reason: "spam",
+    });
+
+    await expect(sources.blocks.list()).resolves.toEqual([
+      { userId: "2", name: "user_2", blockedAt: now } satisfies AppBlockedUser,
+    ]);
+    await expect(
+      sources.blocks.create({ targetUserId: "2" }),
+    ).resolves.toEqual({
+      userId: "2",
+      name: "user_2",
+      blockedAt: now,
+    } satisfies AppBlockedUser);
+    expect(createBlock).toHaveBeenCalledWith({ targetUserId: 2 });
+
+    await expect(
+      sources.blocks.remove({ targetUserId: "2" }),
+    ).resolves.toEqual({
+      targetUserId: "2",
+      removed: true,
+    });
+    expect(removeBlock).toHaveBeenCalledWith({ targetUserId: 2 });
+  });
+
+  it.each([
+    "",
+    "0",
+    "01",
+    "1e3",
+    "abc",
+    " 1 ",
+    "-1",
+    "9007199254740993",
+    "9".repeat(400),
+  ])(
+    "rejects non-canonical report target ID %s before the server call",
+    async (targetId) => {
+      const createReport = vi.fn();
+      const sources = createServerDataSources(
+        createDependencies({
+          createReport,
+        }),
+      );
+
+      await expect(
+        sources.reports.create({
+          targetType: "post",
+          targetId,
+          reason: "spam",
+        }),
+      ).rejects.toThrow("INVALID_TARGET_ID");
+      expect(createReport).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "",
+    "0",
+    "01",
+    "1e3",
+    "abc",
+    " 2 ",
+    "-2",
+    "9007199254740993",
+    "9".repeat(400),
+  ])(
+    "rejects non-canonical block target ID %s before the server call",
+    async (targetUserId) => {
+      const createBlock = vi.fn();
+      const removeBlock = vi.fn();
+      const sources = createServerDataSources(
+        createDependencies({
+          createBlock,
+          removeBlock,
+        }),
+      );
+
+      await expect(
+        sources.blocks.create({ targetUserId }),
+      ).rejects.toThrow("INVALID_TARGET_USER_ID");
+      await expect(
+        sources.blocks.remove({ targetUserId }),
+      ).rejects.toThrow("INVALID_TARGET_USER_ID");
+      expect(createBlock).not.toHaveBeenCalled();
+      expect(removeBlock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("keeps mock reports unique per target key", async () => {
+    const first = await mockDataSources.reports.create({
+      targetType: "post",
+      targetId: "p1",
+      reason: "spam",
+    } satisfies CreateReportInput);
+    const second = await mockDataSources.reports.create({
+      targetType: "post",
+      targetId: "p1",
+      reason: "harassment",
+      details: "second report should reuse the first record",
+    } satisfies CreateReportInput);
+
+    expect(second).toEqual(first);
+  });
+
+  it("filters blocked users from mock posts comments and chat surfaces", async () => {
+    expect(
+      (await mockDataSources.chat.list()).some((user) => user.id === "u1"),
+    ).toBe(true);
+
+    await mockDataSources.blocks.create({ targetUserId: "u1" });
+
+    const posts = await mockDataSources.posts.getAll();
+    const comments = await mockDataSources.postComments.list({ postId: "p1" });
+    const chatUsers = await mockDataSources.chat.list();
+    expect(posts.some((post) => post.user.id === "u1")).toBe(false);
+    expect(comments.some((comment) => comment.user.id === "u1")).toBe(false);
+    expect(chatUsers.some((user) => user.id === "u1")).toBe(false);
+  });
+
+  it("does not restore follow state when a mock block is removed", async () => {
+    expect(
+      (await mockDataSources.chat.list()).some((user) => user.id === "u4"),
+    ).toBe(true);
+
+    await mockDataSources.blocks.create({ targetUserId: "u4" });
+    await mockDataSources.blocks.remove({ targetUserId: "u4" });
+
+    await expect(mockDataSources.blocks.list()).resolves.not.toContainEqual(
+      expect.objectContaining({ userId: "u4" }),
+    );
+    expect(
+      (await mockDataSources.chat.list()).some((user) => user.id === "u4"),
+    ).toBe(false);
+  });
+
+  it("rejects blocked mock chat detail and message send", async () => {
+    await mockDataSources.blocks.create({ targetUserId: "u7" });
+
+    await expect(
+      mockDataSources.chat.messages({ targetUserId: "u7" }),
+    ).rejects.toThrow("USER_BLOCKED");
+    await expect(
+      mockDataSources.chat.sendMessage({
+        targetUserId: "u7",
+        body: "hello",
+      }),
+    ).rejects.toThrow("USER_BLOCKED");
   });
 });

@@ -5,6 +5,11 @@ import { serverDataSources } from "./server-data-source";
 import type { DataSources } from "./types";
 
 export type {
+  AppBlockedUser,
+  AppReportReason,
+  AppReportResult,
+  AppReportTargetType,
+  CreateReportInput,
   CreateUploadUrlInput,
   CreateUploadUrlResponse,
   CurrentParticipation,

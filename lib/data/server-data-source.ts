@@ -1,15 +1,18 @@
 import { apiTrpcClient } from "../trpc";
 
 import type {
+  AppBlockedUser,
   AppChatListItem,
   AppChatMessage,
   AppChatMessages,
   AppMyPost,
   AppPost,
   AppPostComment,
+  AppReportResult,
   AppTopic,
   ChatMessagesInput,
   CheckInParticipationInput,
+  CreateReportInput,
   CreateUploadUrlInput,
   CreateUploadUrlResponse,
   CurrentParticipation,
@@ -39,6 +42,27 @@ type SetFollowing = (input: SetFollowingInput) => Promise<SetFollowingResponse>;
 type GetChatList = () => Promise<AppChatListItem[]>;
 type GetChatMessages = (input: ChatMessagesInput) => Promise<AppChatMessages>;
 type SendChatMessage = (input: SendChatMessageInput) => Promise<AppChatMessage>;
+type CreateReport = (input: {
+  targetType: CreateReportInput["targetType"];
+  targetId: number;
+  reason: CreateReportInput["reason"];
+  details?: string;
+}) => Promise<{
+  id: number;
+  targetType: CreateReportInput["targetType"];
+  targetId: number;
+  status: AppReportResult["status"];
+  createdAt: string;
+}>;
+type ListBlocks = () => Promise<
+  Array<{ userId: number; name: string; blockedAt: string }>
+>;
+type CreateBlock = (input: {
+  targetUserId: number;
+}) => Promise<{ userId: number; name: string; blockedAt: string }>;
+type RemoveBlock = (input: {
+  targetUserId: number;
+}) => Promise<{ targetUserId: number; removed: true }>;
 type ServerPostComment = {
   id: number;
   postId: number;
@@ -71,9 +95,32 @@ type ServerDataSourceDependencies = {
   getChatList: GetChatList;
   getChatMessages: GetChatMessages;
   sendChatMessage: SendChatMessage;
+  createReport: CreateReport;
+  listBlocks: ListBlocks;
+  createBlock: CreateBlock;
+  removeBlock: RemoveBlock;
   listPostComments: ListPostComments;
   createPostComment: CreatePostComment;
 };
+
+function parseCanonicalPositiveInteger(
+  value: string,
+  errorMessage: "INVALID_TARGET_ID" | "INVALID_TARGET_USER_ID",
+): number {
+  if (!/^[1-9]\d*$/.test(value)) {
+    throw new Error(errorMessage);
+  }
+  const parsed = Number(value);
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed <= 0 ||
+    !Number.isFinite(parsed) ||
+    String(parsed) !== value
+  ) {
+    throw new Error(errorMessage);
+  }
+  return parsed;
+}
 
 function toAppPostComment(comment: ServerPostComment): AppPostComment {
   return {
@@ -86,6 +133,26 @@ function toAppPostComment(comment: ServerPostComment): AppPostComment {
     },
     body: comment.body,
     createdAt: comment.createdAt,
+  };
+}
+
+function toAppReportResult(result: Awaited<ReturnType<CreateReport>>): AppReportResult {
+  return {
+    id: String(result.id),
+    targetType: result.targetType,
+    targetId: String(result.targetId),
+    status: result.status,
+    createdAt: result.createdAt,
+  };
+}
+
+function toAppBlockedUser(
+  user: Awaited<ReturnType<ListBlocks>>[number] | Awaited<ReturnType<CreateBlock>>,
+): AppBlockedUser {
+  return {
+    userId: String(user.userId),
+    name: user.name,
+    blockedAt: user.blockedAt,
   };
 }
 
@@ -123,6 +190,47 @@ export function createServerDataSources(
     follow: {
       setFollowing: dependencies.setFollowing,
     },
+    reports: {
+      create: async (input) => {
+        const result = await dependencies.createReport({
+          targetType: input.targetType,
+          targetId: parseCanonicalPositiveInteger(
+            input.targetId,
+            "INVALID_TARGET_ID",
+          ),
+          reason: input.reason,
+          details: input.details,
+        });
+        return toAppReportResult(result);
+      },
+    },
+    blocks: {
+      list: async () => {
+        const result = await dependencies.listBlocks();
+        return result.map(toAppBlockedUser);
+      },
+      create: async (input) => {
+        const result = await dependencies.createBlock({
+          targetUserId: parseCanonicalPositiveInteger(
+            input.targetUserId,
+            "INVALID_TARGET_USER_ID",
+          ),
+        });
+        return toAppBlockedUser(result);
+      },
+      remove: async (input) => {
+        const result = await dependencies.removeBlock({
+          targetUserId: parseCanonicalPositiveInteger(
+            input.targetUserId,
+            "INVALID_TARGET_USER_ID",
+          ),
+        });
+        return {
+          targetUserId: String(result.targetUserId),
+          removed: true,
+        };
+      },
+    },
     chat: {
       list: dependencies.getChatList,
       messages: dependencies.getChatMessages,
@@ -149,6 +257,10 @@ export const serverDataSources = createServerDataSources({
   getMyPost: () => apiTrpcClient.posts.myCurrent.query(),
   listPostComments: (input) => apiTrpcClient.posts.comments.query(input),
   createPostComment: (input) => apiTrpcClient.posts.createComment.mutate(input),
+  createReport: (input) => apiTrpcClient.reports.create.mutate(input),
+  listBlocks: () => apiTrpcClient.blocks.list.query(),
+  createBlock: (input) => apiTrpcClient.blocks.create.mutate(input),
+  removeBlock: (input) => apiTrpcClient.blocks.remove.mutate(input),
   setFollowing: async (input) => {
     const result = await apiTrpcClient.follow.setFollowing.mutate({
       targetUserId: Number(input.targetUserId),

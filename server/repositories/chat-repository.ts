@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   chatRoomMembers,
@@ -21,11 +21,18 @@ export interface ChatRepository {
   areMutual(userAId: number, userBId: number): Promise<boolean>;
   areActiveInSameTopic(userAId: number, userBId: number): Promise<boolean>;
   findLatestPostImageStorageKey(userId: number): Promise<string | null>;
-  findRoomIdForUsers(userAId: number, userBId: number): Promise<number | undefined>;
+  findRoomIdForUsers(
+    userAId: number,
+    userBId: number,
+  ): Promise<number | undefined>;
   createRoomForUsers(userAId: number, userBId: number): Promise<number>;
   listMessages(chatRoomId: number, limit: number): Promise<ChatMessageRecord[]>;
   findLatestMessage(chatRoomId: number): Promise<ChatMessageRecord | undefined>;
-  insertMessage(chatRoomId: number, senderUserId: number, body: string): Promise<ChatMessageRecord>;
+  insertMessage(
+    chatRoomId: number,
+    senderUserId: number,
+    body: string,
+  ): Promise<ChatMessageRecord>;
 }
 
 export class DrizzleChatRepository implements ChatRepository {
@@ -33,7 +40,17 @@ export class DrizzleChatRepository implements ChatRepository {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
-    const result = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
+    const result = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(
+        and(
+          eq(users.id, userId),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      )
+      .limit(1);
     return result.length > 0;
   }
 
@@ -41,7 +58,17 @@ export class DrizzleChatRepository implements ChatRepository {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
-    const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const result = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.id, userId),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      )
+      .limit(1);
     return result[0];
   }
 
@@ -75,6 +102,8 @@ export class DrizzleChatRepository implements ChatRepository {
         and(
           eq(follows.followingUserId, viewerUserId),
           inArray(follows.followerUserId, followingIds),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
         ),
       );
 
@@ -88,20 +117,33 @@ export class DrizzleChatRepository implements ChatRepository {
     const aFollowsB = await db
       .select({ id: follows.id })
       .from(follows)
-      .where(and(eq(follows.followerUserId, userAId), eq(follows.followingUserId, userBId)))
+      .where(
+        and(
+          eq(follows.followerUserId, userAId),
+          eq(follows.followingUserId, userBId),
+        ),
+      )
       .limit(1);
     if (aFollowsB.length === 0) return false;
 
     const bFollowsA = await db
       .select({ id: follows.id })
       .from(follows)
-      .where(and(eq(follows.followerUserId, userBId), eq(follows.followingUserId, userAId)))
+      .where(
+        and(
+          eq(follows.followerUserId, userBId),
+          eq(follows.followingUserId, userAId),
+        ),
+      )
       .limit(1);
 
     return bFollowsA.length > 0;
   }
 
-  async areActiveInSameTopic(userAId: number, userBId: number): Promise<boolean> {
+  async areActiveInSameTopic(
+    userAId: number,
+    userBId: number,
+  ): Promise<boolean> {
     const userATopicId = await this.findActiveTopicIdByUserId(userAId);
     if (!userATopicId) {
       return false;
@@ -132,14 +174,25 @@ export class DrizzleChatRepository implements ChatRepository {
     const result = await db
       .select({ imageStorageKey: posts.imageStorageKey })
       .from(posts)
-      .where(eq(posts.userId, userId))
+      .innerJoin(users, eq(posts.userId, users.id))
+      .where(
+        and(
+          eq(posts.userId, userId),
+          isNull(posts.hiddenAt),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      )
       .orderBy(desc(posts.createdAt))
       .limit(1);
 
     return result[0]?.imageStorageKey ?? null;
   }
 
-  async findRoomIdForUsers(userAId: number, userBId: number): Promise<number | undefined> {
+  async findRoomIdForUsers(
+    userAId: number,
+    userBId: number,
+  ): Promise<number | undefined> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
@@ -153,7 +206,12 @@ export class DrizzleChatRepository implements ChatRepository {
     const userBRoom = await db
       .select({ chatRoomId: chatRoomMembers.chatRoomId })
       .from(chatRoomMembers)
-      .where(and(eq(chatRoomMembers.userId, userBId), inArray(chatRoomMembers.chatRoomId, roomIds)))
+      .where(
+        and(
+          eq(chatRoomMembers.userId, userBId),
+          inArray(chatRoomMembers.chatRoomId, roomIds),
+        ),
+      )
       .limit(1);
 
     return userBRoom[0]?.chatRoomId;
@@ -172,53 +230,91 @@ export class DrizzleChatRepository implements ChatRepository {
     return chatRoomId;
   }
 
-  async listMessages(chatRoomId: number, limit: number): Promise<ChatMessageRecord[]> {
+  async listMessages(
+    chatRoomId: number,
+    limit: number,
+  ): Promise<ChatMessageRecord[]> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
     const result = await db
-      .select()
+      .select({ message: messages })
       .from(messages)
-      .where(eq(messages.chatRoomId, chatRoomId))
+      .innerJoin(users, eq(messages.senderUserId, users.id))
+      .where(
+        and(
+          eq(messages.chatRoomId, chatRoomId),
+          isNull(messages.hiddenAt),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      )
       .orderBy(desc(messages.createdAt))
       .limit(limit);
 
-    return result.reverse();
+    return result.map((row) => row.message).reverse();
   }
 
-  async findLatestMessage(chatRoomId: number): Promise<ChatMessageRecord | undefined> {
+  async findLatestMessage(
+    chatRoomId: number,
+  ): Promise<ChatMessageRecord | undefined> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
     const result = await db
-      .select()
+      .select({ message: messages })
       .from(messages)
-      .where(eq(messages.chatRoomId, chatRoomId))
+      .innerJoin(users, eq(messages.senderUserId, users.id))
+      .where(
+        and(
+          eq(messages.chatRoomId, chatRoomId),
+          isNull(messages.hiddenAt),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      )
       .orderBy(desc(messages.createdAt))
       .limit(1);
 
-    return result[0];
+    return result[0]?.message;
   }
 
-  async insertMessage(chatRoomId: number, senderUserId: number, body: string): Promise<ChatMessageRecord> {
+  async insertMessage(
+    chatRoomId: number,
+    senderUserId: number,
+    body: string,
+  ): Promise<ChatMessageRecord> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
-    const result = await db.insert(messages).values({ chatRoomId, senderUserId, body });
+    const result = await db
+      .insert(messages)
+      .values({ chatRoomId, senderUserId, body });
     const messageId = Number(result[0].insertId);
-    const inserted = await db.select().from(messages).where(eq(messages.id, messageId)).limit(1);
+    const inserted = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, messageId))
+      .limit(1);
     if (!inserted[0]) throw new Error("Inserted message not found");
     return inserted[0];
   }
 
-  private async findActiveTopicIdByUserId(userId: number): Promise<number | undefined> {
+  private async findActiveTopicIdByUserId(
+    userId: number,
+  ): Promise<number | undefined> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
     const result = await db
       .select({ topicId: participations.topicId })
       .from(participations)
-      .where(and(eq(participations.userId, userId), eq(participations.status, "active")))
+      .where(
+        and(
+          eq(participations.userId, userId),
+          eq(participations.status, "active"),
+        ),
+      )
       .limit(1);
 
     return result[0]?.topicId;

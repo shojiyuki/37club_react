@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { participations, posts, topics, users } from "../../drizzle/schema";
 import { getDb } from "../db";
@@ -29,13 +29,20 @@ export class DrizzlePostsRepository implements PostsRepository {
     const result = await db
       .select({ topicId: participations.topicId })
       .from(participations)
-      .where(and(eq(participations.userId, userId), eq(participations.status, "active")))
+      .where(
+        and(
+          eq(participations.userId, userId),
+          eq(participations.status, "active"),
+        ),
+      )
       .limit(1);
 
     return result.find((record) => record.topicId !== undefined)?.topicId;
   }
 
-  async findCurrentTopicPosts(userId: number): Promise<CurrentTopicPostRecord[]> {
+  async findCurrentTopicPosts(
+    userId: number,
+  ): Promise<CurrentTopicPostRecord[]> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
@@ -60,10 +67,19 @@ export class DrizzlePostsRepository implements PostsRepository {
           eq(participations.status, "active"),
         ),
       )
-      .where(eq(posts.topicId, topicId));
+      .where(
+        and(
+          eq(posts.topicId, topicId),
+          isNull(posts.hiddenAt),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      );
   }
 
-  async findMyCurrentPost(userId: number): Promise<MyCurrentPostRecord | undefined> {
+  async findMyCurrentPost(
+    userId: number,
+  ): Promise<MyCurrentPostRecord | undefined> {
     const db = await getDb();
     if (!db) throw new Error("Database is not available");
 
@@ -75,8 +91,17 @@ export class DrizzlePostsRepository implements PostsRepository {
       })
       .from(participations)
       .innerJoin(posts, eq(participations.postId, posts.id))
+      .innerJoin(users, eq(posts.userId, users.id))
       .innerJoin(topics, eq(participations.topicId, topics.id))
-      .where(and(eq(participations.userId, userId), eq(participations.status, "active")))
+      .where(
+        and(
+          eq(participations.userId, userId),
+          eq(participations.status, "active"),
+          isNull(posts.hiddenAt),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      )
       .limit(1);
 
     return result[0];

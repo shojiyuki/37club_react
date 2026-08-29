@@ -117,10 +117,26 @@ Current product routers:
 - `storage`
 - `follow`
 - `chat`
+- `reports`
+- `blocks`
 - `auth.me`
 - `system.health`
 
 Feature routers should live in `server/routers/*` and be mounted from `server/routers.ts`.
+
+## UGC Safety
+
+UGC safety is enforced on the server; client-side visibility is not the security boundary.
+
+- `reports.create` accepts Post, public comment, Chat message, and user targets. Reporter identity always comes from `ctx.user.id`.
+- `blocks.create` stores a directional block and removes both follow directions in one transaction.
+- A block in either direction hides or rejects Posts, comments, follow operations, Chat list/detail/send, and report/block target access.
+- `blocks.list` returns only blocks created by the authenticated user; `blocks.remove` removes only that outgoing block and never restores follows.
+- `hiddenAt` on Posts/comments/messages removes content from product queries. `suspendedAt` rejects authentication and removes the user's content from product results.
+- A report never hides content or suspends a user automatically. Operators update the moderation field and report status in one reviewed transaction.
+- Report details, UGC bodies, images, tokens, and personal data must not be written to request/error logs.
+
+The schema source of truth is `drizzle/schema.ts`. Local operator documentation is under `.codex/wip/` and is intentionally not a tracked deployment artifact.
 
 ## Storage
 

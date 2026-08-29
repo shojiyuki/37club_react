@@ -20,6 +20,38 @@ export type SetFollowingResponse = {
   followState: AppFollowState;
 };
 
+export type AppReportTargetType = "post" | "post_comment" | "message" | "user";
+
+export type AppReportReason =
+  | "spam"
+  | "harassment"
+  | "sexual_content"
+  | "violence"
+  | "personal_information"
+  | "impersonation"
+  | "other";
+
+export type CreateReportInput = {
+  targetType: AppReportTargetType;
+  targetId: string;
+  reason: AppReportReason;
+  details?: string;
+};
+
+export type AppReportResult = {
+  id: string;
+  targetType: AppReportTargetType;
+  targetId: string;
+  status: "pending" | "action_taken" | "dismissed";
+  createdAt: string;
+};
+
+export type AppBlockedUser = {
+  userId: string;
+  name: string;
+  blockedAt: string;
+};
+
 export type AppChatListItem = {
   id: string;
   name: string;
@@ -135,6 +167,16 @@ export interface DataSources {
   };
   follow: {
     setFollowing(input: SetFollowingInput): Promise<SetFollowingResponse>;
+  };
+  reports: {
+    create(input: CreateReportInput): Promise<AppReportResult>;
+  };
+  blocks: {
+    list(): Promise<AppBlockedUser[]>;
+    create(input: { targetUserId: string }): Promise<AppBlockedUser>;
+    remove(
+      input: { targetUserId: string },
+    ): Promise<{ targetUserId: string; removed: true }>;
   };
   chat: {
     list(): Promise<AppChatListItem[]>;

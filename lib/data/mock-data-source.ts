@@ -1,12 +1,15 @@
 import type {
+  AppBlockedUser,
   AppChatListItem,
   AppChatMessage,
   AppChatMessages,
   AppMyPost,
   AppPostComment,
+  AppReportResult,
   AppTopic,
   ChatMessagesInput,
   CheckInParticipationInput,
+  CreateReportInput,
   CreateUploadUrlInput,
   CurrentParticipation,
   DataSources,
@@ -21,6 +24,12 @@ import {
   MOCK_USERS,
 } from "../mock-data";
 
+const mockFollowStatesByUserId = new Map(
+  MOCK_USERS.map((user) => [user.id, user.followState] as const),
+);
+const mockReportsByTargetKey = new Map<string, AppReportResult>();
+const mockBlockedUsersById = new Map<string, AppBlockedUser>();
+
 const mockCommentsByPost = new Map<string, AppPostComment[]>(
   Object.entries(MOCK_POST_COMMENTS_BY_POST).map(([postId, comments]) => [
     postId,
@@ -31,6 +40,52 @@ const mockCommentsByPost = new Map<string, AppPostComment[]>(
   ]),
 );
 let nextMockCommentId = 1;
+let nextMockReportId = 1;
+
+function isBlockedUser(userId: string): boolean {
+  return mockBlockedUsersById.has(userId);
+}
+
+function getMockFollowState(userId: string) {
+  return mockFollowStatesByUserId.get(userId) ?? "none";
+}
+
+function createReportKey(input: CreateReportInput): string {
+  return `${input.targetType}:${input.targetId}`;
+}
+
+function createMockReport(input: CreateReportInput): AppReportResult {
+  const key = createReportKey(input);
+  const existing = mockReportsByTargetKey.get(key);
+  if (existing) return existing;
+
+  const created = {
+    id: `mock-report-${nextMockReportId++}`,
+    targetType: input.targetType,
+    targetId: input.targetId,
+    status: "pending",
+    createdAt: new Date().toISOString(),
+  } satisfies AppReportResult;
+  mockReportsByTargetKey.set(key, created);
+  return created;
+}
+
+function createMockBlockedUser(targetUserId: string): AppBlockedUser {
+  const existing = mockBlockedUsersById.get(targetUserId);
+  if (existing) return existing;
+
+  const user = MOCK_USERS.find((candidate) => candidate.id === targetUserId);
+  if (!user) throw new Error("BLOCK_TARGET_NOT_FOUND");
+
+  const blockedUser = {
+    userId: targetUserId,
+    name: user.name,
+    blockedAt: new Date().toISOString(),
+  } satisfies AppBlockedUser;
+  mockBlockedUsersById.set(targetUserId, blockedUser);
+  mockFollowStatesByUserId.set(targetUserId, "none");
+  return blockedUser;
+}
 
 function createMockPostComment(input: CreatePostCommentInput): AppPostComment {
   if (input.body.length > 200) throw new Error("COMMENT_TOO_LONG");
@@ -163,7 +218,7 @@ function createMockCurrentParticipation(
 }
 
 function getMockChatMessages(userId: string | undefined): AppChatMessage[] {
-  if (!userId) return [];
+  if (!userId || isBlockedUser(userId)) return [];
   return (MOCK_CHAT_BY_USER[userId] ?? []).map((message) => ({
     id: message.id,
     senderId: message.senderId,
@@ -179,7 +234,9 @@ function getMockChatList(): AppChatListItem[] {
     }
   }
 
-  return MOCK_USERS.filter((user) => user.followState === "mutual").map(
+  return MOCK_USERS.filter(
+    (user) => !isBlockedUser(user.id) && getMockFollowState(user.id) === "mutual",
+  ).map(
     (user) => {
       const history = MOCK_CHAT_BY_USER[user.id] ?? [];
       const last = history[history.length - 1];
@@ -219,7 +276,15 @@ export const mockDataSources: DataSources = {
   },
   posts: {
     async getAll() {
-      return MOCK_POSTS;
+      return MOCK_POSTS.filter((post) => !isBlockedUser(post.user.id)).map(
+        (post) => ({
+          ...post,
+          user: {
+            ...post.user,
+            followState: getMockFollowState(post.user.id),
+          },
+        }),
+      );
     },
     async getMyPost() {
       return MOCK_MY_POST;
@@ -227,10 +292,12 @@ export const mockDataSources: DataSources = {
   },
   postComments: {
     async list(input) {
-      return (mockCommentsByPost.get(input.postId) ?? []).map((comment) => ({
-        ...comment,
-        user: { ...comment.user },
-      }));
+      return (mockCommentsByPost.get(input.postId) ?? [])
+        .filter((comment) => !isBlockedUser(comment.user.id))
+        .map((comment) => ({
+          ...comment,
+          user: { ...comment.user },
+        }));
     },
     async create(input) {
       return createMockPostComment(input);
@@ -238,10 +305,29 @@ export const mockDataSources: DataSources = {
   },
   follow: {
     async setFollowing(input: SetFollowingInput) {
+      const nextFollowState = input.following ? "following" : "none";
+      mockFollowStatesByUserId.set(input.targetUserId, nextFollowState);
       return {
         targetUserId: input.targetUserId,
-        followState: input.following ? "following" : "none",
+        followState: nextFollowState,
       };
+    },
+  },
+  reports: {
+    async create(input) {
+      return createMockReport(input);
+    },
+  },
+  blocks: {
+    async list() {
+      return [...mockBlockedUsersById.values()];
+    },
+    async create(input) {
+      return createMockBlockedUser(input.targetUserId);
+    },
+    async remove(input) {
+      mockBlockedUsersById.delete(input.targetUserId);
+      return { targetUserId: input.targetUserId, removed: true };
     },
   },
   chat: {
@@ -249,6 +335,9 @@ export const mockDataSources: DataSources = {
       return getMockChatList();
     },
     async messages(input: ChatMessagesInput): Promise<AppChatMessages> {
+      if (isBlockedUser(input.targetUserId)) {
+        throw new Error("USER_BLOCKED");
+      }
       const user = MOCK_USERS.find(
         (mockUser) => mockUser.id === input.targetUserId,
       );
@@ -261,6 +350,9 @@ export const mockDataSources: DataSources = {
       };
     },
     async sendMessage(input: SendChatMessageInput) {
+      if (isBlockedUser(input.targetUserId)) {
+        throw new Error("USER_BLOCKED");
+      }
       return {
         id: `m${Date.now()}`,
         senderId: "me",

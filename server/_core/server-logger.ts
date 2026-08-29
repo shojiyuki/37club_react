@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import type { Report } from "../../drizzle/schema";
 
 type LogLevel = "info" | "warn" | "error";
 type LogValue = string | number | boolean | null;
@@ -28,6 +29,18 @@ export function logServerEvent(level: LogLevel, event: string, fields: LogFields
   } else {
     console.log(line);
   }
+}
+
+export function logReportCreated(input: {
+  reportId: number;
+  targetType: Report["targetType"];
+  status: Report["status"];
+}): void {
+  logServerEvent("info", "report_created", {
+    report_id: input.reportId,
+    target_type: input.targetType,
+    status: input.status,
+  });
 }
 
 export function getSafeRequestPath(req: Pick<Request, "path">): string {

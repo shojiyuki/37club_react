@@ -1,7 +1,5 @@
-import {
-  noAppReviewConfigRepository,
-  type AppReviewConfigRepository,
-} from "../repositories/app-review-config-repository";
+import type { AppReviewConfigRepository } from "../repositories/app-review-config-repository";
+import type { BlockRepository } from "../repositories/block-repository";
 import type { ParticipationRepository } from "../repositories/participation-repository";
 import type {
   PostCommentRecord,
@@ -14,6 +12,7 @@ export type PostCommentsServiceErrorCode =
   | "NO_ACTIVE_PARTICIPATION"
   | "POST_NOT_IN_ACTIVE_TOPIC"
   | "PARTICIPATION_EXPIRED"
+  | "USER_BLOCKED"
   | "EMPTY_COMMENT"
   | "COMMENT_TOO_LONG";
 
@@ -37,7 +36,8 @@ export class PostCommentsService {
   constructor(
     private readonly commentsRepository: PostCommentsRepository,
     private readonly participationRepository: ParticipationRepository,
-    private readonly appReviewConfigRepository: AppReviewConfigRepository = noAppReviewConfigRepository,
+    private readonly appReviewConfigRepository: AppReviewConfigRepository,
+    private readonly blockRepository: BlockRepository,
     private readonly clock: Clock = () => new Date(),
   ) {}
 
@@ -47,14 +47,24 @@ export class PostCommentsService {
   ): Promise<PostCommentResponse[]> {
     await this.requireAccess(viewerUserId, input.postId);
     const records = await this.commentsRepository.listByPostId(input.postId);
-    return records.map((record) => this.toResponse(viewerUserId, record));
+    const counterpartyUserIds = new Set(
+      await this.blockRepository.listCounterpartyUserIds(viewerUserId),
+    );
+    return records
+      .filter((record) => !counterpartyUserIds.has(record.user.id))
+      .map((record) => this.toResponse(viewerUserId, record));
   }
 
   async create(
     viewerUserId: number,
     input: { postId: number; body: string },
   ): Promise<PostCommentResponse> {
-    await this.requireAccess(viewerUserId, input.postId);
+    const post = await this.requireAccess(viewerUserId, input.postId);
+    if (
+      await this.blockRepository.hasEitherDirection(viewerUserId, post.userId)
+    ) {
+      throw new PostCommentsServiceError("USER_BLOCKED");
+    }
     this.validateBody(input.body);
     const record = await this.commentsRepository.create({
       postId: input.postId,
@@ -67,7 +77,7 @@ export class PostCommentsService {
   private async requireAccess(
     viewerUserId: number,
     postId: number,
-  ): Promise<void> {
+  ): Promise<{ topicId: number; userId: number }> {
     const active =
       await this.participationRepository.findActiveByUserId(viewerUserId);
     if (!active) {
@@ -97,6 +107,7 @@ export class PostCommentsService {
     if (post.topicId !== active.topic.id) {
       throw new PostCommentsServiceError("POST_NOT_IN_ACTIVE_TOPIC");
     }
+    return post;
   }
 
   private validateBody(body: string): void {

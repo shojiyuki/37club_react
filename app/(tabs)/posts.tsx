@@ -4,6 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useRef, useState } from "react";
 import {
+  Alert,
   Dimensions,
   FlatList,
   Modal,
@@ -32,12 +33,16 @@ import {
   PostCommentPreview,
   PostCommentsPanel,
 } from "@/components/post-comments";
+import { createPostSafetyTarget } from "@/components/post-comments/post-safety";
+import { usePostSafetyFlow } from "@/components/post-comments/usePostSafetyFlow";
+import { useBlockActions } from "@/hooks/use-blocks";
 import { useFollow } from "@/hooks/use-follow";
 import {
   isParticipationAccessError,
   usePostComments,
 } from "@/hooks/use-post-comments";
 import { usePosts } from "@/hooks/use-posts";
+import { useReport } from "@/hooks/use-report";
 import { useAppMode } from "@/lib/app-mode-context";
 import type { AppFollowState, AppPost, AppPostComment } from "@/lib/data/types";
 
@@ -56,7 +61,6 @@ const COLORS = {
   textSecondary: "#B7BDD6",
   textMuted: "#6E7594",
   border: "#1A1F3A",
-  divider: "rgba(255,255,255,0.08)",
 };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -159,9 +163,25 @@ function PostBottomSheet({
   const isCommentMode = useSharedValue(false);
   const [commentModeState, setCommentModeState] = useState(false);
   const [inputText, setInputText] = useState("");
-  const [moreMenuVisible, setMoreMenuVisible] = useState(false);
   const commentsListRef = useRef<FlatList<AppPostComment>>(null);
+  const { report } = useReport();
+  const { blockUser } = useBlockActions();
   const postId = post?.id;
+  const isMutual = post?.user.followState === "mutual";
+  const isMine = post?.user.isMine === true;
+  const handleReportSuccess = React.useCallback(() => {
+    Alert.alert("通報を受け付けました");
+  }, []);
+  const postSafety = usePostSafetyFlow({
+    visible,
+    postId,
+    isMutualPost: isMutual,
+    report,
+    blockUser,
+    onUnfollow: handleUnfollowFromMenu,
+    onReportSuccess: handleReportSuccess,
+    onClose,
+  });
   const {
     comments,
     previewComments,
@@ -179,7 +199,6 @@ function PostBottomSheet({
       isCommentMode.value = false;
       setCommentModeState(false);
       setInputText("");
-      setMoreMenuVisible(false);
       translateY.value = withTiming(0, {
         duration: 350,
         easing: Easing.out(Easing.cubic),
@@ -203,9 +222,6 @@ function PostBottomSheet({
     transform: [{ translateY: translateY.value }],
     height: sheetHeight.value,
   }));
-
-  const isMutual = post?.user.followState === "mutual";
-  const isMine = post?.user.isMine === true;
 
   function expandToComments() {
     if (isCommentMode.value) return;
@@ -266,12 +282,29 @@ function PostBottomSheet({
   }
 
   function handleMorePress() {
-    setMoreMenuVisible(true);
+    if (!post || post.user.isMine) return;
+    postSafety.openMenu(
+      createPostSafetyTarget({
+        targetType: "post",
+        targetId: post.id,
+        userId: post.user.id,
+      }),
+    );
+  }
+
+  function handleOpenCommentActions(comment: AppPostComment) {
+    if (comment.user.isMine) return;
+    postSafety.openMenu(
+      createPostSafetyTarget({
+        targetType: "post_comment",
+        targetId: comment.id,
+        userId: comment.user.id,
+      }),
+    );
   }
 
   function handleUnfollowFromMenu() {
     if (!post) return;
-    setMoreMenuVisible(false);
     onFollowChange(post.user.id, "none");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -314,7 +347,7 @@ function PostBottomSheet({
       transparent
       visible={visible}
       animationType="none"
-      onRequestClose={onClose}
+      onRequestClose={postSafety.requestClose}
     >
       <TouchableWithoutFeedback
         onPress={commentModeState ? undefined : onClose}
@@ -344,6 +377,7 @@ function PostBottomSheet({
               onRefresh={() => void refreshComments()}
               onRetry={() => void refreshComments()}
               onBackToPost={collapseToDetail}
+              onOpenCommentActions={handleOpenCommentActions}
             />
           ) : (
             /* ── 70% DETAIL MODE ── */
@@ -374,15 +408,19 @@ function PostBottomSheet({
                       onPress={handleFollowPress}
                     />
                   )}
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.moreBtn,
-                      pressed && { opacity: 0.6 },
-                    ]}
-                    onPress={handleMorePress}
-                  >
-                    <Text style={styles.moreBtnText}>⋯</Text>
-                  </Pressable>
+                  {!isMine ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${post.user.name}の投稿メニュー`}
+                      style={({ pressed }) => [
+                        styles.moreBtn,
+                        pressed && { opacity: 0.6 },
+                      ]}
+                      onPress={handleMorePress}
+                    >
+                      <Text style={styles.moreBtnText}>⋯</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               </View>
               <View style={[styles.divider, { width: imageSize }]} />
@@ -406,52 +444,7 @@ function PostBottomSheet({
         </Animated.View>
       </GestureDetector>
 
-      {moreMenuVisible && (
-        <View style={styles.moreMenuLayer}>
-          <Pressable
-            style={styles.moreMenuBackdrop}
-            onPress={() => setMoreMenuVisible(false)}
-          />
-          <View
-            style={[
-              styles.moreMenuPanel,
-              { paddingBottom: Math.max(insets.bottom, 14) },
-            ]}
-          >
-            {isMutual && !isMine ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.moreMenuItem,
-                  pressed && styles.moreMenuItemPressed,
-                ]}
-                onPress={handleUnfollowFromMenu}
-              >
-                <Text
-                  style={[
-                    styles.moreMenuItemText,
-                    styles.moreMenuDestructiveText,
-                  ]}
-                >
-                  フォロー解除
-                </Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              style={({ pressed }) => [
-                styles.moreMenuItem,
-                pressed && styles.moreMenuItemPressed,
-              ]}
-              onPress={() => setMoreMenuVisible(false)}
-            >
-              <Text
-                style={[styles.moreMenuItemText, styles.moreMenuCancelText]}
-              >
-                キャンセル
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
+      {postSafety.inlineStage}
     </Modal>
   );
 }
@@ -1073,49 +1066,6 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 18,
     fontWeight: "700",
-  },
-  moreMenuLayer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "flex-end",
-  },
-  moreMenuBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  moreMenuPanel: {
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: COLORS.surface2,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.neon,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  moreMenuItem: {
-    minHeight: 52,
-    justifyContent: "center",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.divider,
-  },
-  moreMenuItemPressed: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-  },
-  moreMenuItemText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  moreMenuDestructiveText: {
-    color: "#FF7D9A",
-  },
-  moreMenuCancelText: {
-    color: COLORS.textSecondary,
   },
   divider: {
     height: 1,

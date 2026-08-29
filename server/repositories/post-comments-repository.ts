@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 
 import { postComments, posts, users } from "../../drizzle/schema";
 import { getDb } from "../db";
@@ -26,11 +26,19 @@ export class DrizzlePostCommentsRepository implements PostCommentsRepository {
     if (!db) throw new Error("Database is not available");
 
     const rows = await db
-      .select()
+      .select({ post: posts })
       .from(posts)
-      .where(eq(posts.id, postId))
+      .innerJoin(users, eq(posts.userId, users.id))
+      .where(
+        and(
+          eq(posts.id, postId),
+          isNull(posts.hiddenAt),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      )
       .limit(1);
-    return rows[0];
+    return rows[0]?.post;
   }
 
   async listByPostId(postId: number): Promise<PostCommentRecord[]> {
@@ -41,7 +49,16 @@ export class DrizzlePostCommentsRepository implements PostCommentsRepository {
       .select({ comment: postComments, user: users })
       .from(postComments)
       .innerJoin(users, eq(postComments.userId, users.id))
-      .where(eq(postComments.postId, postId))
+      .innerJoin(posts, eq(postComments.postId, posts.id))
+      .where(
+        and(
+          eq(postComments.postId, postId),
+          isNull(postComments.hiddenAt),
+          isNull(posts.hiddenAt),
+          isNull(users.suspendedAt),
+          isNull(users.deletedAt),
+        ),
+      )
       .orderBy(asc(postComments.createdAt), asc(postComments.id));
   }
 

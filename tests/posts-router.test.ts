@@ -13,6 +13,7 @@ const user: User = {
   createdAt: new Date("2026-08-29T00:00:00.000Z"),
   updatedAt: new Date("2026-08-29T00:00:00.000Z"),
   lastSignedIn: new Date("2026-08-29T00:00:00.000Z"),
+  suspendedAt: null,
   deletedAt: null,
 };
 

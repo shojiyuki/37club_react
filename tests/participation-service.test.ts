@@ -99,6 +99,7 @@ function createRecord(
     topicId: 20,
     imageStorageKey: "posts/1/30.jpg",
     caption: "sample",
+    hiddenAt: null,
     createdAt: new Date("2026-07-08T11:31:00.000Z"),
     updatedAt: new Date("2026-07-08T11:31:00.000Z"),
   };

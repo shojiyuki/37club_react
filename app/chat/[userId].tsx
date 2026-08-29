@@ -6,6 +6,7 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -13,12 +14,28 @@ import {
   StyleSheet,
   Text,
 } from "react-native";
-import { ChatContextHeader, ChatInputBar, ChatMessageList } from "@/components/chat";
+import {
+  ChatContextHeader,
+  ChatInputBar,
+  ChatMessageList,
+} from "../../components/chat";
+import { ChatSafetyStage } from "../../components/chat/ChatSafetyStage";
+import {
+  createChatMessageSafetyTarget,
+  createChatSafetySessionKey,
+  createChatUserSafetyTarget,
+  createInitialChatSafetyFlowState,
+  getChatSafetyFlowEffectForSession,
+  reduceChatSafetyFlow,
+  sendChatMessageWithBlockHandling,
+} from "../../components/chat/chat-safety";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
-import { useChatContextPost } from "@/hooks/use-chat-context-post";
-import { useChatMessages } from "@/hooks/use-chat-messages";
-import { useAppMode } from "@/lib/app-mode-context";
+import { LiveTimerHeaderTicking } from "../../components/LiveTimerHeader";
+import { useBlockActions } from "../../hooks/use-blocks";
+import { useChatContextPost } from "../../hooks/use-chat-context-post";
+import { useChatMessages } from "../../hooks/use-chat-messages";
+import { useReport } from "../../hooks/use-report";
+import { useAppMode } from "../../lib/app-mode-context";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -28,7 +45,9 @@ const COLORS = {
 };
 
 const LIVE_REMAINING_MS = 4 * 60 * 1000 + 52 * 1000;
-const MOCK_START_AT = new Date(Date.now() - (37 * 60 * 1000 - LIVE_REMAINING_MS)).toISOString();
+const MOCK_START_AT = new Date(
+  Date.now() - (37 * 60 * 1000 - LIVE_REMAINING_MS),
+).toISOString();
 
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
@@ -54,22 +73,78 @@ export default function ChatDetailScreen() {
   const { messages, sendMessage } = useChatMessages(userId);
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);
+  const [safetyState, safetyDispatch] = React.useReducer(
+    reduceChatSafetyFlow,
+    undefined,
+    createInitialChatSafetyFlowState,
+  );
+  const handledSafetyEffect = useRef<typeof safetyState.effect>(null);
+  const safetySessionKey = createChatSafetySessionKey({ userId });
+  const { report } = useReport();
+  const { blockUser } = useBlockActions();
 
-  function handleSend() {
+  React.useEffect(() => {
+    safetyDispatch({ type: "reset" });
+  }, [safetySessionKey]);
+
+  React.useEffect(() => {
+    const effect = safetyState.effect;
+    if (!effect || handledSafetyEffect.current === effect) return;
+    handledSafetyEffect.current = effect;
+    safetyDispatch({ type: "effect_handled", effect });
+
+    const currentEffect = getChatSafetyFlowEffectForSession(
+      safetyState,
+      safetySessionKey,
+    );
+    if (!currentEffect) return;
+
+    if (currentEffect.type === "show_report_success") {
+      Alert.alert("通報を受け付けました");
+    } else {
+      router.back();
+    }
+  }, [safetySessionKey, safetyState]);
+
+  async function handleSend() {
     const text = inputText.trim();
     if (!text) return;
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
-    sendMessage(text);
-    setInputText("");
-    setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 100);
+    await sendChatMessageWithBlockHandling({
+      sendMessage,
+      text,
+      onSent: () => {
+        setInputText("");
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      },
+      onUserBlocked: () => router.back(),
+    });
   }
 
   function handleBack() {
     router.back();
+  }
+
+  function handleMessageLongPress(message: (typeof messages)[number]) {
+    if (message.senderId === "me") return;
+    safetyDispatch({
+      type: "open_menu",
+      target: createChatMessageSafetyTarget(message),
+      sessionKey: safetySessionKey,
+    });
+  }
+
+  function handleHeaderSafetyAction() {
+    if (!userId) return;
+    safetyDispatch({
+      type: "open_menu",
+      target: createChatUserSafetyTarget(userId),
+      sessionKey: safetySessionKey,
+    });
   }
 
   return (
@@ -88,11 +163,29 @@ export default function ChatDetailScreen() {
         horizontalPadding={12}
         leading={
           <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && { opacity: 0.6 }]}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && { opacity: 0.6 },
+            ]}
             onPress={handleBack}
           >
             <Text style={styles.backArrow}>‹</Text>
           </Pressable>
+        }
+        trailing={
+          userId ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="会話相手の操作"
+              style={({ pressed }) => [
+                styles.safetyActionButton,
+                pressed && { opacity: 0.6 },
+              ]}
+              onPress={handleHeaderSafetyAction}
+            >
+              <Text style={styles.safetyActionText}>•••</Text>
+            </Pressable>
+          ) : undefined
         }
       />
 
@@ -103,14 +196,25 @@ export default function ChatDetailScreen() {
         contentContainerStyle={styles.messageList}
         onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         emptyText="最初のメッセージを送ろう"
+        onLongPress={handleMessageLongPress}
       />
 
       {/* Input bar */}
       <ChatInputBar
         value={inputText}
         onChangeText={setInputText}
-        onSend={handleSend}
+        onSend={() => {
+          void handleSend();
+        }}
         bottomInset={Math.max(insets.bottom, 16)}
+      />
+
+      <ChatSafetyStage
+        state={safetyState}
+        sessionKey={safetySessionKey}
+        report={report}
+        blockUser={blockUser}
+        dispatch={safetyDispatch}
       />
     </KeyboardAvoidingView>
   );
@@ -134,6 +238,18 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "300",
     lineHeight: 32,
+  },
+  safetyActionButton: {
+    width: 44,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  safetyActionText: {
+    color: COLORS.neon,
+    fontSize: 20,
+    fontWeight: "700",
+    letterSpacing: 1,
   },
   messageList: {
     paddingHorizontal: 16,

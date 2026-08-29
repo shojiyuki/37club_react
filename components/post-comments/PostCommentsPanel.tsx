@@ -31,6 +31,7 @@ export type PostCommentsPanelProps = {
   onRefresh: () => void;
   onRetry: () => void;
   onBackToPost: () => void;
+  onOpenCommentActions: (comment: AppPostComment) => void;
 };
 
 export function PostCommentsPanel({
@@ -49,6 +50,7 @@ export function PostCommentsPanel({
   onRefresh,
   onRetry,
   onBackToPost,
+  onOpenCommentActions,
 }: PostCommentsPanelProps) {
   const sendDisabled = isSending || inputText.trim().length === 0;
 
@@ -109,6 +111,19 @@ export function PostCommentsPanel({
                   minute: "2-digit",
                 })}
               </Text>
+              {!item.user.isMine ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.user.name}のコメントメニュー`}
+                  style={({ pressed }) => [
+                    styles.commentMenuButton,
+                    pressed && styles.pressed,
+                  ]}
+                  onPress={() => onOpenCommentActions(item)}
+                >
+                  <Text style={styles.commentMenuText}>⋯</Text>
+                </Pressable>
+              ) : null}
             </View>
             <Text style={styles.commentBody}>{item.body}</Text>
           </View>
@@ -271,6 +286,19 @@ const styles = StyleSheet.create({
   commentTime: {
     color: "#6E7594",
     fontSize: 11,
+  },
+  commentMenuButton: {
+    width: 44,
+    height: 44,
+    flexShrink: 0,
+    marginVertical: -12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  commentMenuText: {
+    color: "#6E7594",
+    fontSize: 18,
+    fontWeight: "700",
   },
   commentBody: {
     color: "rgba(255,255,255,0.9)",

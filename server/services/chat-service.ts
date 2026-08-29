@@ -3,6 +3,7 @@ import type {
   ChatRepository,
   ChatUserRecord,
 } from "../repositories/chat-repository";
+import type { BlockRepository } from "../repositories/block-repository";
 import type { Storage } from "../storage/storage";
 
 const DEFAULT_MESSAGE_LIMIT = 50;
@@ -41,6 +42,7 @@ export type SendChatMessageResponse = {
 export type ChatServiceErrorCode =
   | "CANNOT_CHAT_SELF"
   | "USER_NOT_FOUND"
+  | "USER_BLOCKED"
   | "NOT_MUTUAL"
   | "NOT_ACTIVE_IN_SAME_TOPIC"
   | "EMPTY_MESSAGE"
@@ -55,27 +57,43 @@ export class ChatServiceError extends Error {
 export class ChatService {
   constructor(
     private readonly repository: ChatRepository,
+    private readonly blockRepository: BlockRepository,
     private readonly storage: Storage | null = null,
   ) {}
 
   async list(viewerUserId: number): Promise<ChatListItemResponse[]> {
     const users = await this.repository.listMutualUsers(viewerUserId);
+    const counterpartyUserIds = new Set(
+      await this.blockRepository.listCounterpartyUserIds(viewerUserId),
+    );
 
     return Promise.all(
-      users.map(async (user) => {
-        const roomId = await this.repository.findRoomIdForUsers(viewerUserId, user.id);
-        const latestMessage = roomId ? await this.repository.findLatestMessage(roomId) : undefined;
-        const imageStorageKey = await this.repository.findLatestPostImageStorageKey(user.id);
+      users
+        .filter((user) => !counterpartyUserIds.has(user.id))
+        .map(async (user) => {
+          const roomId = await this.repository.findRoomIdForUsers(
+            viewerUserId,
+            user.id,
+          );
+          const latestMessage = roomId
+            ? await this.repository.findLatestMessage(roomId)
+            : undefined;
+          const imageStorageKey =
+            await this.repository.findLatestPostImageStorageKey(user.id);
 
-        return {
-          userId: user.id,
-          userName: toUserName(user),
-          imageUrl: imageStorageKey ? await this.createReadUrl(imageStorageKey) : null,
-          lastMessage: latestMessage ? toLastMessageText(viewerUserId, latestMessage) : "",
-          lastMessageAt: latestMessage?.createdAt.toISOString() ?? null,
-          hasUnread: false,
-        };
-      }),
+          return {
+            userId: user.id,
+            userName: toUserName(user),
+            imageUrl: imageStorageKey
+              ? await this.createReadUrl(imageStorageKey)
+              : null,
+            lastMessage: latestMessage
+              ? toLastMessageText(viewerUserId, latestMessage)
+              : "",
+            lastMessageAt: latestMessage?.createdAt.toISOString() ?? null,
+            hasUnread: false,
+          };
+        }),
     );
   }
 
@@ -83,17 +101,28 @@ export class ChatService {
     viewerUserId: number,
     input: { targetUserId: number; limit?: number },
   ): Promise<ChatMessagesResponse> {
-    const targetUser = await this.validateChatTarget(viewerUserId, input.targetUserId);
-    const roomId = await this.repository.findRoomIdForUsers(viewerUserId, input.targetUserId);
+    await this.requireNotBlocked(viewerUserId, input.targetUserId);
+    const targetUser = await this.validateChatTarget(
+      viewerUserId,
+      input.targetUserId,
+    );
+    const roomId = await this.repository.findRoomIdForUsers(
+      viewerUserId,
+      input.targetUserId,
+    );
     const limit = normalizeLimit(input.limit);
-    const messages = roomId ? await this.repository.listMessages(roomId, limit) : [];
+    const messages = roomId
+      ? await this.repository.listMessages(roomId, limit)
+      : [];
 
     return {
       targetUser: {
         id: targetUser.id,
         name: toUserName(targetUser),
       },
-      messages: messages.map((message) => toMessageResponse(viewerUserId, message)),
+      messages: messages.map((message) =>
+        toMessageResponse(viewerUserId, message),
+      ),
     };
   }
 
@@ -101,21 +130,35 @@ export class ChatService {
     viewerUserId: number,
     input: { targetUserId: number; body: string },
   ): Promise<SendChatMessageResponse> {
+    await this.requireNotBlocked(viewerUserId, input.targetUserId);
     await this.validateChatTarget(viewerUserId, input.targetUserId);
     const body = normalizeBody(input.body);
 
-    let roomId = await this.repository.findRoomIdForUsers(viewerUserId, input.targetUserId);
+    let roomId = await this.repository.findRoomIdForUsers(
+      viewerUserId,
+      input.targetUserId,
+    );
     if (!roomId) {
-      roomId = await this.repository.createRoomForUsers(viewerUserId, input.targetUserId);
+      roomId = await this.repository.createRoomForUsers(
+        viewerUserId,
+        input.targetUserId,
+      );
     }
 
-    const message = await this.repository.insertMessage(roomId, viewerUserId, body);
+    const message = await this.repository.insertMessage(
+      roomId,
+      viewerUserId,
+      body,
+    );
     return {
       message: toMessageResponse(viewerUserId, message),
     };
   }
 
-  private async validateChatTarget(viewerUserId: number, targetUserId: number): Promise<ChatUserRecord> {
+  private async validateChatTarget(
+    viewerUserId: number,
+    targetUserId: number,
+  ): Promise<ChatUserRecord> {
     if (viewerUserId === targetUserId) {
       throw new ChatServiceError("CANNOT_CHAT_SELF");
     }
@@ -129,11 +172,24 @@ export class ChatService {
       throw new ChatServiceError("NOT_MUTUAL");
     }
 
-    if (!(await this.repository.areActiveInSameTopic(viewerUserId, targetUserId))) {
+    if (
+      !(await this.repository.areActiveInSameTopic(viewerUserId, targetUserId))
+    ) {
       throw new ChatServiceError("NOT_ACTIVE_IN_SAME_TOPIC");
     }
 
     return targetUser;
+  }
+
+  private async requireNotBlocked(
+    viewerUserId: number,
+    targetUserId: number,
+  ): Promise<void> {
+    if (
+      await this.blockRepository.hasEitherDirection(viewerUserId, targetUserId)
+    ) {
+      throw new ChatServiceError("USER_BLOCKED");
+    }
   }
 
   private async createReadUrl(imageStorageKey: string): Promise<string | null> {
@@ -162,7 +218,10 @@ function toUserName(user: ChatUserRecord): string {
   return user.name ?? `user_${user.id}`;
 }
 
-function toMessageResponse(viewerUserId: number, message: ChatMessageRecord): ChatMessageResponse {
+function toMessageResponse(
+  viewerUserId: number,
+  message: ChatMessageRecord,
+): ChatMessageResponse {
   return {
     id: message.id,
     senderUserId: message.senderUserId,
@@ -172,6 +231,11 @@ function toMessageResponse(viewerUserId: number, message: ChatMessageRecord): Ch
   };
 }
 
-function toLastMessageText(viewerUserId: number, message: ChatMessageRecord): string {
-  return message.senderUserId === viewerUserId ? `あなた: ${message.body}` : message.body;
+function toLastMessageText(
+  viewerUserId: number,
+  message: ChatMessageRecord,
+): string {
+  return message.senderUserId === viewerUserId
+    ? `あなた: ${message.body}`
+    : message.body;
 }

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { ChatMessage } from "@/hooks/use-chat-messages";
 
@@ -15,24 +15,53 @@ const ME = "me";
 export function ChatBubble({
   message,
   compact = false,
+  onLongPress,
 }: {
   message: ChatMessage;
   compact?: boolean;
+  onLongPress?: (message: ChatMessage) => void;
 }) {
   const isMe = message.senderId === ME;
+  const bubble = (
+    <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
+      <Text
+        style={[
+          styles.bubbleText,
+          compact ? styles.bubbleTextCompact : styles.bubbleTextRegular,
+          isMe ? styles.bubbleTextMe : styles.bubbleTextThem,
+        ]}
+      >
+        {message.text}
+      </Text>
+    </View>
+  );
+
   return (
-    <View style={[styles.bubbleRow, isMe ? styles.bubbleRowMe : styles.bubbleRowThem]}>
-      <View style={[styles.bubble, isMe ? styles.bubbleMe : styles.bubbleThem]}>
-        <Text
-          style={[
-            styles.bubbleText,
-            compact ? styles.bubbleTextCompact : styles.bubbleTextRegular,
-            isMe ? styles.bubbleTextMe : styles.bubbleTextThem,
+    <View
+      style={[
+        styles.bubbleRow,
+        isMe ? styles.bubbleRowMe : styles.bubbleRowThem,
+      ]}
+    >
+      {isMe || !onLongPress ? (
+        bubble
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="メッセージの操作"
+          accessibilityActions={[
+            { name: "activate", label: "メッセージの操作" },
           ]}
+          onLongPress={() => onLongPress(message)}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === "activate") {
+              onLongPress(message);
+            }
+          }}
         >
-          {message.text}
-        </Text>
-      </View>
+          {bubble}
+        </Pressable>
+      )}
     </View>
   );
 }

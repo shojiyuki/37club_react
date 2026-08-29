@@ -23,7 +23,7 @@ export class RequestAuthenticator {
     }
 
     const user = await this.userResolver.resolve(identity);
-    if (user.deletedAt) {
+    if (user.deletedAt || user.suspendedAt) {
       return null;
     }
 

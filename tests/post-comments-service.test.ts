@@ -8,6 +8,7 @@ import type {
   User,
 } from "../drizzle/schema";
 import type { AppReviewConfigRepository } from "../server/repositories/app-review-config-repository";
+import type { BlockRepository } from "../server/repositories/block-repository";
 import type {
   ActiveParticipationRecord,
   ParticipationRepository,
@@ -30,6 +31,7 @@ function createPost(overrides: Partial<Post> = {}): Post {
     topicId: 20,
     imageStorageKey: "users/2/posts/photo.jpg",
     caption: "red",
+    hiddenAt: null,
     createdAt: NOW,
     updatedAt: NOW,
     ...overrides,
@@ -94,6 +96,7 @@ function createCommentRecord(
     createdAt: NOW,
     updatedAt: NOW,
     lastSignedIn: NOW,
+    suspendedAt: null,
     deletedAt: null,
   };
   return {
@@ -102,6 +105,7 @@ function createCommentRecord(
       postId: input.postId ?? 11,
       userId,
       body: input.body ?? "hello",
+      hiddenAt: null,
       createdAt: NOW,
     },
     user,
@@ -160,11 +164,28 @@ function createAppReviewConfigRepository(
   };
 }
 
+function createBlockRepository(
+  overrides: Partial<BlockRepository> = {},
+): BlockRepository {
+  return {
+    findAvailableUserById: vi.fn(),
+    findOutgoing: vi.fn(),
+    listOutgoing: vi.fn().mockResolvedValue([]),
+    listCounterpartyUserIds: vi.fn().mockResolvedValue([]),
+    hasEitherDirection: vi.fn().mockResolvedValue(false),
+    haveSharedChatRoom: vi.fn().mockResolvedValue(false),
+    createAndRemoveFollows: vi.fn(),
+    removeOutgoing: vi.fn(),
+    ...overrides,
+  };
+}
+
 function createService(
   input: {
     comments?: PostCommentsRepository;
     activeRecord?: ActiveParticipationRecord | null;
     appReviewConfigs?: AppReviewConfig[];
+    blocks?: BlockRepository;
   } = {},
 ) {
   const activeRecord =
@@ -177,6 +198,7 @@ function createService(
     comments,
     participations,
     createAppReviewConfigRepository(input.appReviewConfigs),
+    input.blocks ?? createBlockRepository(),
     () => NOW,
   );
   return { comments, participations, service };
@@ -212,6 +234,32 @@ describe("PostCommentsService", () => {
     ]);
   });
 
+  it("filters blocked comment authors from the list", async () => {
+    const comments = createCommentRepository({
+      listByPostId: vi
+        .fn()
+        .mockResolvedValue([
+          createCommentRecord({ id: 1, userId: 2, body: "blocked" }),
+          createCommentRecord({ id: 2, userId: 3, body: "visible" }),
+        ]),
+    });
+    const blocks = createBlockRepository({
+      listCounterpartyUserIds: vi.fn().mockResolvedValue([2]),
+    });
+
+    await expect(
+      createService({ comments, blocks }).service.list(1, { postId: 11 }),
+    ).resolves.toEqual([
+      {
+        id: 2,
+        postId: 11,
+        user: { id: 3, name: "user_3", isMine: false },
+        body: "visible",
+        createdAt: "2026-08-29T00:10:00.000Z",
+      },
+    ]);
+  });
+
   it("stores the original body without trimming", async () => {
     const comments = createCommentRepository({
       create: vi
@@ -230,6 +278,26 @@ describe("PostCommentsService", () => {
       userId: 1,
       body: "  hello  ",
     });
+  });
+
+  it("rejects comment creation when either user has blocked the Post author", async () => {
+    const comments = createCommentRepository({
+      create: vi
+        .fn()
+        .mockResolvedValue(createCommentRecord({ userId: 1, body: "hello" })),
+    });
+    const blocks = createBlockRepository({
+      hasEitherDirection: vi.fn().mockResolvedValue(true),
+    });
+
+    await expect(
+      createService({ comments, blocks }).service.create(1, {
+        postId: 11,
+        body: "hello",
+      }),
+    ).rejects.toEqual(new PostCommentsServiceError("USER_BLOCKED"));
+    expect(blocks.hasEitherDirection).toHaveBeenCalledWith(1, 2);
+    expect(comments.create).not.toHaveBeenCalled();
   });
 
   it("rejects access without an active participation", async () => {

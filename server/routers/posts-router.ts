@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { DrizzleBlockRepository } from "../repositories/block-repository";
 import { DrizzlePostsRepository } from "../repositories/posts-repository";
 import { DrizzleFollowRepository } from "../repositories/follow-repository";
 import { DrizzleAppReviewConfigRepository } from "../repositories/app-review-config-repository";
@@ -19,6 +20,7 @@ function createPostsService(): PostsService {
     new DrizzlePostsRepository(),
     new S3Storage(),
     new DrizzleFollowRepository(),
+    new DrizzleBlockRepository(),
   );
 }
 
@@ -27,6 +29,7 @@ function createPostCommentsService(): PostCommentsService {
     new DrizzlePostCommentsRepository(),
     new DrizzleParticipationRepository(),
     new DrizzleAppReviewConfigRepository(),
+    new DrizzleBlockRepository(),
   );
 }
 

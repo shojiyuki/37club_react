@@ -31,6 +31,7 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  suspendedAt: timestamp("suspendedAt"),
   deletedAt: timestamp("deletedAt"),
 });
 
@@ -134,6 +135,7 @@ export const messages = mysqlTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     body: text("body").notNull(),
+    hiddenAt: timestamp("hiddenAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -193,6 +195,7 @@ export const posts = mysqlTable(
       .references(() => topics.id, { onDelete: "restrict" }),
     imageStorageKey: varchar("imageStorageKey", { length: 1024 }).notNull(),
     caption: text("caption").notNull(),
+    hiddenAt: timestamp("hiddenAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
@@ -217,6 +220,7 @@ export const postComments = mysqlTable(
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
     body: text("body").notNull(),
+    hiddenAt: timestamp("hiddenAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
   (table) => [
@@ -230,6 +234,89 @@ export const postComments = mysqlTable(
 
 export type PostComment = typeof postComments.$inferSelect;
 export type InsertPostComment = typeof postComments.$inferInsert;
+
+export const reports = mysqlTable(
+  "reports",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    reporterUserId: int("reporterUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    targetType: mysqlEnum("targetType", [
+      "post",
+      "post_comment",
+      "message",
+      "user",
+    ])
+      .notNull(),
+    targetId: int("targetId").notNull(),
+    targetUserId: int("targetUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    reason: mysqlEnum("reason", [
+      "spam",
+      "harassment",
+      "sexual_content",
+      "violence",
+      "personal_information",
+      "impersonation",
+      "other",
+    ])
+      .notNull(),
+    details: text("details"),
+    status: mysqlEnum("status", ["pending", "action_taken", "dismissed"])
+      .default("pending")
+      .notNull(),
+    reviewedAt: timestamp("reviewedAt"),
+    reviewedByUserId: int("reviewedByUserId").references(() => users.id, {
+      onDelete: "restrict",
+    }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("reports_reporter_target_unique").on(
+      table.reporterUserId,
+      table.targetType,
+      table.targetId,
+    ),
+    index("reports_status_created_at_idx").on(table.status, table.createdAt),
+    index("reports_target_idx").on(table.targetType, table.targetId),
+    index("reports_target_user_created_at_idx").on(
+      table.targetUserId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const userBlocks = mysqlTable(
+  "userBlocks",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    blockerUserId: int("blockerUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    blockedUserId: int("blockedUserId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("user_blocks_blocker_blocked_unique").on(
+      table.blockerUserId,
+      table.blockedUserId,
+    ),
+    index("user_blocks_blocked_blocker_idx").on(
+      table.blockedUserId,
+      table.blockerUserId,
+    ),
+  ],
+);
+
+export type Report = typeof reports.$inferSelect;
+export type InsertReport = typeof reports.$inferInsert;
+export type UserBlock = typeof userBlocks.$inferSelect;
+export type InsertUserBlock = typeof userBlocks.$inferInsert;
 
 export const participations = mysqlTable(
   "participations",

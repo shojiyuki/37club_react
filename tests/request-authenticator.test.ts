@@ -2,7 +2,10 @@ import type { Request } from "express";
 import { describe, expect, it, vi } from "vitest";
 import type { User } from "../drizzle/schema";
 import { RequestAuthenticator } from "../server/auth/request-authenticator";
-import type { AuthIdentity, TokenVerifier } from "../server/auth/token-verifier";
+import type {
+  AuthIdentity,
+  TokenVerifier,
+} from "../server/auth/token-verifier";
 
 const identity: AuthIdentity = {
   provider: "cognito",
@@ -20,6 +23,7 @@ const user: User = {
   createdAt: new Date(),
   updatedAt: new Date(),
   lastSignedIn: new Date(),
+  suspendedAt: null,
   deletedAt: null,
 };
 
@@ -41,7 +45,9 @@ describe("RequestAuthenticator", () => {
       dependencies.userResolver,
     );
 
-    await expect(authenticator.authenticate(createRequest())).resolves.toBeNull();
+    await expect(
+      authenticator.authenticate(createRequest()),
+    ).resolves.toBeNull();
     expect(dependencies.tokenVerifier.verify).not.toHaveBeenCalled();
   });
 
@@ -57,13 +63,17 @@ describe("RequestAuthenticator", () => {
     await expect(
       authenticator.authenticate(createRequest("Bearer access-token")),
     ).resolves.toBe(user);
-    expect(dependencies.tokenVerifier.verify).toHaveBeenCalledWith("access-token");
+    expect(dependencies.tokenVerifier.verify).toHaveBeenCalledWith(
+      "access-token",
+    );
     expect(dependencies.userResolver.resolve).toHaveBeenCalledWith(identity);
   });
 
   it("returns null when token verification fails", async () => {
     const dependencies = createDependencies();
-    vi.mocked(dependencies.tokenVerifier.verify).mockRejectedValue(new Error("Invalid token"));
+    vi.mocked(dependencies.tokenVerifier.verify).mockRejectedValue(
+      new Error("Invalid token"),
+    );
     const authenticator = new RequestAuthenticator(
       dependencies.tokenVerifier,
       dependencies.userResolver,
@@ -81,6 +91,23 @@ describe("RequestAuthenticator", () => {
     dependencies.userResolver.resolve.mockResolvedValue({
       ...user,
       deletedAt: new Date("2026-07-13T00:00:00.000Z"),
+    });
+    const authenticator = new RequestAuthenticator(
+      dependencies.tokenVerifier,
+      dependencies.userResolver,
+    );
+
+    await expect(
+      authenticator.authenticate(createRequest("Bearer access-token")),
+    ).resolves.toBeNull();
+  });
+
+  it("returns null when the resolved user is suspended", async () => {
+    const dependencies = createDependencies();
+    vi.mocked(dependencies.tokenVerifier.verify).mockResolvedValue(identity);
+    dependencies.userResolver.resolve.mockResolvedValue({
+      ...user,
+      suspendedAt: new Date("2026-08-29T00:10:00.000Z"),
     });
     const authenticator = new RequestAuthenticator(
       dependencies.tokenVerifier,

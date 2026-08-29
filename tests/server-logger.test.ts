@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createRequestLoggingMiddleware,
   getSafeRequestPath,
+  logReportCreated,
   logServerEvent,
 } from "../server/_core/server-logger";
 
@@ -79,6 +80,31 @@ describe("server-logger", () => {
     res.emit("finish");
 
     expect(output).not.toHaveBeenCalled();
+    output.mockRestore();
+  });
+
+  it("logs only non-sensitive fields for a created report", () => {
+    const output = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    logReportCreated({
+      reportId: 30,
+      targetType: "message",
+      status: "pending",
+    });
+
+    const serialized = String(output.mock.calls[0]?.[0]);
+    const record = JSON.parse(serialized);
+    expect(record).toMatchObject({
+      level: "info",
+      event: "report_created",
+      report_id: 30,
+      target_type: "message",
+      status: "pending",
+    });
+    expect(record).not.toHaveProperty("details");
+    expect(record).not.toHaveProperty("body");
+    expect(record).not.toHaveProperty("email");
+    expect(record).not.toHaveProperty("image_url");
     output.mockRestore();
   });
 });

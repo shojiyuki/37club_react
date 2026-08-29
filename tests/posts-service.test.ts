@@ -5,13 +5,16 @@ import type {
   MyCurrentPostRecord,
   PostsRepository,
 } from "../server/repositories/posts-repository";
+import type { BlockRepository } from "../server/repositories/block-repository";
 import type { FollowRepository } from "../server/repositories/follow-repository";
 import { PostsService } from "../server/services/posts-service";
 import type { Storage } from "../server/storage/storage";
 
 const NOW = new Date("2026-07-09T15:52:04.000Z");
 
-function createRepository(overrides: Partial<PostsRepository> = {}): PostsRepository {
+function createRepository(
+  overrides: Partial<PostsRepository> = {},
+): PostsRepository {
   return {
     findActiveTopicIdByUserId: vi.fn(),
     findCurrentTopicPosts: vi.fn().mockResolvedValue([]),
@@ -29,13 +32,31 @@ function createStorage(): Storage {
   };
 }
 
-function createFollowRepository(overrides: Partial<FollowRepository> = {}): FollowRepository {
+function createFollowRepository(
+  overrides: Partial<FollowRepository> = {},
+): FollowRepository {
   return {
     userExists: vi.fn(),
     areActiveInSameTopic: vi.fn().mockResolvedValue(true),
     isFollowing: vi.fn().mockResolvedValue(false),
     follow: vi.fn(),
     unfollow: vi.fn(),
+    ...overrides,
+  };
+}
+
+function createBlockRepository(
+  overrides: Partial<BlockRepository> = {},
+): BlockRepository {
+  return {
+    findAvailableUserById: vi.fn(),
+    findOutgoing: vi.fn(),
+    listOutgoing: vi.fn().mockResolvedValue([]),
+    listCounterpartyUserIds: vi.fn().mockResolvedValue([]),
+    hasEitherDirection: vi.fn().mockResolvedValue(false),
+    haveSharedChatRoom: vi.fn().mockResolvedValue(false),
+    createAndRemoveFollows: vi.fn(),
+    removeOutgoing: vi.fn(),
     ...overrides,
   };
 }
@@ -54,9 +75,10 @@ function createPostRecord(
       topicId: 1,
       imageStorageKey: "users/1/posts/photo.png",
       caption: "赤いもの",
-      createdAt: NOW,
-      updatedAt: NOW,
       ...overrides.post,
+      hiddenAt: overrides.post?.hiddenAt ?? null,
+      createdAt: overrides.post?.createdAt ?? NOW,
+      updatedAt: overrides.post?.updatedAt ?? NOW,
     },
     user: {
       id: 1,
@@ -65,11 +87,12 @@ function createPostRecord(
       email: "shoji@example.test",
       loginMethod: "test",
       role: "user",
-      createdAt: NOW,
-      updatedAt: NOW,
-      lastSignedIn: NOW,
-      deletedAt: null,
       ...overrides.user,
+      createdAt: overrides.user?.createdAt ?? NOW,
+      updatedAt: overrides.user?.updatedAt ?? NOW,
+      lastSignedIn: overrides.user?.lastSignedIn ?? NOW,
+      suspendedAt: overrides.user?.suspendedAt ?? null,
+      deletedAt: overrides.user?.deletedAt ?? null,
     },
     topic: {
       id: 1,
@@ -108,13 +131,20 @@ function createMyPostRecord(): MyCurrentPostRecord {
 describe("PostsService", () => {
   it("returns current topic posts with signed read URLs and none follow state", async () => {
     const repository = createRepository({
-      findCurrentTopicPosts: vi.fn().mockResolvedValue([
-        createPostRecord({ user: { id: 2, name: "hana" } }),
-      ]),
+      findCurrentTopicPosts: vi
+        .fn()
+        .mockResolvedValue([
+          createPostRecord({ user: { id: 2, name: "hana" } }),
+        ]),
     });
     const storage = createStorage();
     const followRepository = createFollowRepository();
-    const service = new PostsService(repository, storage, followRepository);
+    const service = new PostsService(
+      repository,
+      storage,
+      followRepository,
+      createBlockRepository(),
+    );
 
     const result = await service.listCurrentTopicPosts(1);
 
@@ -132,22 +162,30 @@ describe("PostsService", () => {
         topicId: "1",
       },
     ]);
-    expect(storage.createReadUrl).toHaveBeenCalledWith("users/1/posts/photo.png");
+    expect(storage.createReadUrl).toHaveBeenCalledWith(
+      "users/1/posts/photo.png",
+    );
     expect(followRepository.isFollowing).toHaveBeenCalledWith(1, 2);
   });
 
   it("returns following when viewer follows the post author", async () => {
     const repository = createRepository({
-      findCurrentTopicPosts: vi.fn().mockResolvedValue([
-        createPostRecord({ user: { id: 2, name: "hana" } }),
-      ]),
+      findCurrentTopicPosts: vi
+        .fn()
+        .mockResolvedValue([
+          createPostRecord({ user: { id: 2, name: "hana" } }),
+        ]),
     });
     const service = new PostsService(
       repository,
       createStorage(),
       createFollowRepository({
-        isFollowing: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false),
+        isFollowing: vi
+          .fn()
+          .mockResolvedValueOnce(true)
+          .mockResolvedValueOnce(false),
       }),
+      createBlockRepository(),
     );
 
     const result = await service.listCurrentTopicPosts(1);
@@ -158,16 +196,22 @@ describe("PostsService", () => {
 
   it("returns mutual when viewer and post author follow each other", async () => {
     const repository = createRepository({
-      findCurrentTopicPosts: vi.fn().mockResolvedValue([
-        createPostRecord({ user: { id: 2, name: "hana" } }),
-      ]),
+      findCurrentTopicPosts: vi
+        .fn()
+        .mockResolvedValue([
+          createPostRecord({ user: { id: 2, name: "hana" } }),
+        ]),
     });
     const service = new PostsService(
       repository,
       createStorage(),
       createFollowRepository({
-        isFollowing: vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(true),
+        isFollowing: vi
+          .fn()
+          .mockResolvedValueOnce(true)
+          .mockResolvedValueOnce(true),
       }),
+      createBlockRepository(),
     );
 
     const result = await service.listCurrentTopicPosts(1);
@@ -181,7 +225,12 @@ describe("PostsService", () => {
       findCurrentTopicPosts: vi.fn().mockResolvedValue([createPostRecord()]),
     });
     const followRepository = createFollowRepository();
-    const service = new PostsService(repository, createStorage(), followRepository);
+    const service = new PostsService(
+      repository,
+      createStorage(),
+      followRepository,
+      createBlockRepository(),
+    );
 
     const result = await service.listCurrentTopicPosts(1);
 
@@ -195,7 +244,12 @@ describe("PostsService", () => {
       findMyCurrentPost: vi.fn().mockResolvedValue(createMyPostRecord()),
     });
     const storage = createStorage();
-    const service = new PostsService(repository, storage);
+    const service = new PostsService(
+      repository,
+      storage,
+      createFollowRepository(),
+      createBlockRepository(),
+    );
 
     const result = await service.getMyCurrentPost(1);
 
@@ -208,7 +262,12 @@ describe("PostsService", () => {
   });
 
   it("returns an empty my post when there is no active participation", async () => {
-    const service = new PostsService(createRepository(), createStorage());
+    const service = new PostsService(
+      createRepository(),
+      createStorage(),
+      createFollowRepository(),
+      createBlockRepository(),
+    );
 
     await expect(service.getMyCurrentPost(1)).resolves.toEqual({
       imageUri: null,
@@ -216,5 +275,38 @@ describe("PostsService", () => {
       postedAt: "",
       topicLabel: "",
     });
+  });
+
+  it("filters blocked authors before signing current Topic post images", async () => {
+    const repository = createRepository({
+      findCurrentTopicPosts: vi.fn().mockResolvedValue([
+        createPostRecord({
+          post: { imageStorageKey: "users/2/posts/blocked.png" },
+          user: { id: 2 },
+        }),
+        createPostRecord({
+          post: { id: 12, imageStorageKey: "users/3/posts/visible.png" },
+          user: { id: 3 },
+        }),
+      ]),
+    });
+    const storage = createStorage();
+    const blocks = createBlockRepository({
+      listCounterpartyUserIds: vi.fn().mockResolvedValue([2]),
+    });
+    const service = new PostsService(
+      repository,
+      storage,
+      createFollowRepository(),
+      blocks,
+    );
+
+    await expect(service.listCurrentTopicPosts(1)).resolves.toMatchObject([
+      { id: "12", user: { id: "3" } },
+    ]);
+    expect(storage.createReadUrl).toHaveBeenCalledTimes(1);
+    expect(storage.createReadUrl).toHaveBeenCalledWith(
+      "users/3/posts/visible.png",
+    );
   });
 });

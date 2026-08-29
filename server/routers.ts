@@ -1,20 +1,24 @@
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { accountRouter } from "./routers/account-router";
+import { blocksRouter } from "./routers/blocks-router";
 import { chatRouter } from "./routers/chat-router";
 import { followRouter } from "./routers/follow-router";
 import { participationRouter } from "./routers/participation-router";
 import { postsRouter } from "./routers/posts-router";
+import { reportsRouter } from "./routers/reports-router";
 import { storageRouter } from "./routers/storage-router";
 import { topicsRouter } from "./routers/topics-router";
 
 export const appRouter = router({
   account: accountRouter,
+  blocks: blocksRouter,
   chat: chatRouter,
   system: systemRouter,
   follow: followRouter,
   participation: participationRouter,
   posts: postsRouter,
+  reports: reportsRouter,
   storage: storageRouter,
   topics: topicsRouter,
   auth: router({

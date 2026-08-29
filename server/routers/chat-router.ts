@@ -1,20 +1,27 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
+import { DrizzleBlockRepository } from "../repositories/block-repository";
 import { DrizzleChatRepository } from "../repositories/chat-repository";
 import { ChatService, ChatServiceError } from "../services/chat-service";
 import { S3Storage } from "../storage/s3-storage";
 import { protectedProcedure, router } from "../_core/trpc";
 
 function createChatService(): ChatService {
-  return new ChatService(new DrizzleChatRepository(), new S3Storage());
+  return new ChatService(
+    new DrizzleChatRepository(),
+    new DrizzleBlockRepository(),
+    new S3Storage(),
+  );
 }
 
 function toTrpcError(error: unknown): never {
   if (error instanceof ChatServiceError) {
     throw new TRPCError({
       code:
-        error.code === "NOT_MUTUAL" || error.code === "NOT_ACTIVE_IN_SAME_TOPIC"
+        error.code === "NOT_MUTUAL" ||
+        error.code === "NOT_ACTIVE_IN_SAME_TOPIC" ||
+        error.code === "USER_BLOCKED"
           ? "FORBIDDEN"
           : "BAD_REQUEST",
       message: error.code,
