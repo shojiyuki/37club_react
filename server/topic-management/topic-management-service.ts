@@ -105,7 +105,10 @@ export class TopicManagementService {
       };
     }
 
-    const records = await this.repository.findCurrentAndUpcoming(this.clock());
+    const records =
+      input.scope === "all"
+        ? await this.repository.findAll()
+        : await this.repository.findCurrentAndUpcoming(this.clock());
     const selectedRecords = records.slice(0, input.limit);
 
     return {

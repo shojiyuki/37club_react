@@ -27,6 +27,7 @@ function createTopic(overrides: Partial<TopicRecord> = {}): TopicRecord {
 
 function createRepository(records: TopicRecord[] = []): TopicsRepository {
   return {
+    findAll: vi.fn().mockResolvedValue(records),
     findCurrentAndUpcoming: vi.fn().mockResolvedValue(records),
     findById: vi
       .fn()

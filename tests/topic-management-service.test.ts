@@ -28,6 +28,7 @@ function createTopic(overrides: Partial<TopicRecord> = {}): TopicRecord {
 
 function createRepository(records: TopicRecord[]): TopicsRepository {
   return {
+    findAll: vi.fn().mockResolvedValue(records),
     findById: vi
       .fn()
       .mockImplementation(async (topicId: number) =>
@@ -100,6 +101,27 @@ describe("TopicManagementService", () => {
     expect(result.count).toBe(2);
     expect(result.topics.map((topic) => topic.topicId)).toEqual([3, 4]);
     expect(repository.findCurrentAndUpcoming).toHaveBeenCalledWith(NOW);
+  });
+
+  it("returns all Topics in repository order up to the requested limit", async () => {
+    const repository = {
+      ...createRepository([createTopic({ id: 99 })]),
+      findAll: vi.fn().mockResolvedValue([
+        createTopic({ id: 5 }),
+        createTopic({ id: 4 }),
+        createTopic({ id: 3 }),
+      ]),
+    };
+    const service = new TopicManagementService(repository, () => NOW);
+
+    const result = await service.select({
+      action: "select",
+      scope: "all",
+      limit: 2,
+    });
+
+    expect(result.count).toBe(2);
+    expect(result.topics.map((topic) => topic.topicId)).toEqual([5, 4]);
   });
 
   it("reports an unknown Topic ID", async () => {

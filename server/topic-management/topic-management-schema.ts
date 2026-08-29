@@ -7,17 +7,17 @@ const selectByIdSchema = z
   })
   .strict();
 
-const selectUpcomingSchema = z
+const selectByScopeSchema = z
   .object({
     action: z.literal("select"),
-    scope: z.literal("upcoming"),
+    scope: z.enum(["upcoming", "all"]),
     limit: z.number().int().min(1).max(50).default(50),
   })
   .strict();
 
 export const topicManagementSelectInputSchema = z.union([
   selectByIdSchema,
-  selectUpcomingSchema,
+  selectByScopeSchema,
 ]);
 
 const tokyoDateTimeSchema = z.iso

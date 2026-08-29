@@ -24,6 +24,15 @@ describe("topicManagementSelectInputSchema", () => {
     ).toEqual({ action: "select", scope: "upcoming", limit: 50 });
   });
 
+  it("accepts all Topics selection and defaults the limit to 50", () => {
+    expect(
+      topicManagementSelectInputSchema.parse({
+        action: "select",
+        scope: "all",
+      }),
+    ).toEqual({ action: "select", scope: "all", limit: 50 });
+  });
+
   it("rejects unsupported actions and ambiguous selection fields", () => {
     expect(
       topicManagementSelectInputSchema.safeParse({ action: "insert" }).success,

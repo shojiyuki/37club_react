@@ -1,4 +1,4 @@
-import { asc, eq, gte } from "drizzle-orm";
+import { asc, desc, eq, gte } from "drizzle-orm";
 
 import { topics } from "../../drizzle/schema";
 import { getDb } from "../db";
@@ -16,6 +16,7 @@ export type UpdateTopicRecordResult = {
 
 export interface TopicsRepository {
   findCurrentAndUpcoming(now: Date): Promise<TopicRecord[]>;
+  findAll(): Promise<TopicRecord[]>;
   findById(topicId: number): Promise<TopicRecord | undefined>;
   create(input: CreateTopicRecordInput): Promise<TopicRecord>;
   update(
@@ -34,6 +35,13 @@ export class DrizzleTopicsRepository implements TopicsRepository {
       .from(topics)
       .where(gte(topics.endAt, now))
       .orderBy(asc(topics.startAt));
+  }
+
+  async findAll(): Promise<TopicRecord[]> {
+    const db = await getDb();
+    if (!db) throw new Error("Database is not available");
+
+    return db.select().from(topics).orderBy(desc(topics.startAt));
   }
 
   async findById(topicId: number): Promise<TopicRecord | undefined> {
