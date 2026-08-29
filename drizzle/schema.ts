@@ -206,6 +206,31 @@ export const posts = mysqlTable(
 export type Post = typeof posts.$inferSelect;
 export type InsertPost = typeof posts.$inferInsert;
 
+export const postComments = mysqlTable(
+  "postComments",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    postId: int("postId")
+      .notNull()
+      .references(() => posts.id, { onDelete: "restrict" }),
+    userId: int("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => [
+    index("post_comments_post_created_id_idx").on(
+      table.postId,
+      table.createdAt,
+      table.id,
+    ),
+  ],
+);
+
+export type PostComment = typeof postComments.$inferSelect;
+export type InsertPostComment = typeof postComments.$inferInsert;
+
 export const participations = mysqlTable(
   "participations",
   {

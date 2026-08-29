@@ -1,10 +1,11 @@
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
+import { router, useFocusEffect } from "expo-router";
+import { useQueryClient } from "@tanstack/react-query";
 import React, { useCallback, useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
-  KeyboardAvoidingView,
   Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -26,13 +27,19 @@ import Animated, {
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ChatBubble, ChatContextHeader, ChatInputBar, ChatMessageList } from "@/components/chat";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
-import { useChatMessages } from "@/hooks/use-chat-messages";
+import {
+  PostCommentPreview,
+  PostCommentsPanel,
+} from "@/components/post-comments";
 import { useFollow } from "@/hooks/use-follow";
+import {
+  isParticipationAccessError,
+  usePostComments,
+} from "@/hooks/use-post-comments";
 import { usePosts } from "@/hooks/use-posts";
 import { useAppMode } from "@/lib/app-mode-context";
-import type { AppPost, AppFollowState } from "@/lib/data/types";
+import type { AppFollowState, AppPost, AppPostComment } from "@/lib/data/types";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -42,12 +49,8 @@ const COLORS = {
   surface2: "#13162B",
   // ── Neon blue only ──
   neon: "#00D8FF",
-  neonGlow: "rgba(0,216,255,0.35)",
-  neonBubble: "rgba(0,216,255,0.12)",
-  neonBubbleBorder: "rgba(0,216,255,0.25)",
   // ── Unpowered (non-follow) frame ──
   unpowered: "#E6E8EE",
-  unpoweredGlow: "rgba(230,232,238,0.10)",
   // ── Text ──
   white: "#FFFFFF",
   textSecondary: "#B7BDD6",
@@ -64,11 +67,13 @@ const CELL_SIZE =
   (SCREEN_WIDTH - OUTER_MARGIN * 2 - CELL_GAP * (NUM_COLS - 1)) / NUM_COLS;
 const COMMENT_HEIGHT = 22;
 
-const SHEET_70 = SCREEN_HEIGHT * 0.70;
+const SHEET_70 = SCREEN_HEIGHT * 0.7;
 const SHEET_100 = SCREEN_HEIGHT * 0.96;
 const LIVE_REMAINING_MS = 4 * 60 * 1000 + 52 * 1000;
 // Start time for ticking timer (mock: 37min - LIVE_REMAINING_MS ago)
-const MOCK_START_AT = new Date(Date.now() - (37 * 60 * 1000 - LIVE_REMAINING_MS)).toISOString();
+const MOCK_START_AT = new Date(
+  Date.now() - (37 * 60 * 1000 - LIVE_REMAINING_MS),
+).toISOString();
 
 // ─── Follow button ────────────────────────────────────────────────────────────
 
@@ -82,27 +87,45 @@ function FollowButton({
   if (state === "none") {
     return (
       <Pressable
-        style={({ pressed }) => [styles.followBtn, styles.followBtnNone, pressed && { opacity: 0.7 }]}
+        style={({ pressed }) => [
+          styles.followBtn,
+          styles.followBtnNone,
+          pressed && { opacity: 0.7 },
+        ]}
         onPress={onPress}
       >
-        <Text style={[styles.followBtnText, { color: COLORS.neon }]}>Follow</Text>
+        <Text style={[styles.followBtnText, { color: COLORS.neon }]}>
+          Follow
+        </Text>
       </Pressable>
     );
   }
   if (state === "following") {
     return (
       <Pressable
-        style={({ pressed }) => [styles.followBtn, styles.followBtnFollowing, pressed && { opacity: 0.7 }]}
+        style={({ pressed }) => [
+          styles.followBtn,
+          styles.followBtnFollowing,
+          pressed && { opacity: 0.7 },
+        ]}
         onPress={onPress}
       >
-        <Text style={[styles.followBtnText, { color: COLORS.white, opacity: 0.7 }]}>Following</Text>
+        <Text
+          style={[styles.followBtnText, { color: COLORS.white, opacity: 0.7 }]}
+        >
+          Following
+        </Text>
       </Pressable>
     );
   }
   // mutual → Chat button
   return (
     <Pressable
-      style={({ pressed }) => [styles.followBtn, styles.followBtnMutual, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [
+        styles.followBtn,
+        styles.followBtnMutual,
+        pressed && { opacity: 0.85 },
+      ]}
       onPress={onPress}
     >
       <Text style={[styles.followBtnText, { color: COLORS.bg }]}>Chat</Text>
@@ -115,41 +138,66 @@ function FollowButton({
 interface BottomSheetProps {
   post: AppPost | null;
   visible: boolean;
-  activeTopicStartAt: string | null;
   onClose: () => void;
-  onFollowChange: (userId: string, next: AppFollowState) => void | Promise<void>;
+  onFollowChange: (
+    userId: string,
+    next: AppFollowState,
+  ) => void | Promise<void>;
+  onParticipationExpired: () => Promise<unknown>;
 }
 
 function PostBottomSheet({
   post,
   visible,
-  activeTopicStartAt,
   onClose,
   onFollowChange,
+  onParticipationExpired,
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(SHEET_70);
   const sheetHeight = useSharedValue(SHEET_70);
-  const isChatMode = useSharedValue(false);
-  const [chatModeState, setChatModeState] = useState(false);
+  const isCommentMode = useSharedValue(false);
+  const [commentModeState, setCommentModeState] = useState(false);
   const [inputText, setInputText] = useState("");
   const [moreMenuVisible, setMoreMenuVisible] = useState(false);
-  const { messages, sendMessage, resetMessages } = useChatMessages(post?.user.id);
-  const flatListRef = useRef<FlatList>(null);
+  const commentsListRef = useRef<FlatList<AppPostComment>>(null);
+  const postId = post?.id;
+  const {
+    comments,
+    previewComments,
+    refreshComments,
+    sendComment,
+    isLoading,
+    isRefreshing,
+    isSending,
+    error,
+    sendError,
+  } = usePostComments({ postId, enabled: visible && Boolean(postId) });
 
   React.useEffect(() => {
-    if (visible && post) {
-      isChatMode.value = false;
-      setChatModeState(false);
+    if (visible && postId) {
+      isCommentMode.value = false;
+      setCommentModeState(false);
       setInputText("");
       setMoreMenuVisible(false);
-      resetMessages();
-      translateY.value = withTiming(0, { duration: 350, easing: Easing.out(Easing.cubic) });
-      sheetHeight.value = withTiming(SHEET_70, { duration: 350, easing: Easing.out(Easing.cubic) });
+      translateY.value = withTiming(0, {
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+      });
+      sheetHeight.value = withTiming(SHEET_70, {
+        duration: 350,
+        easing: Easing.out(Easing.cubic),
+      });
     } else if (!visible) {
       translateY.value = withTiming(SHEET_70, { duration: 300 });
     }
-  }, [isChatMode, post, resetMessages, sheetHeight, translateY, visible]);
+  }, [isCommentMode, postId, sheetHeight, translateY, visible]);
+
+  React.useEffect(() => {
+    if (error && isParticipationAccessError(error)) {
+      void onParticipationExpired();
+    }
+  }, [error, onParticipationExpired]);
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -159,28 +207,37 @@ function PostBottomSheet({
   const isMutual = post?.user.followState === "mutual";
   const isMine = post?.user.isMine === true;
 
-  function expandToChat() {
-    if (!isMutual || isChatMode.value) return;
-    isChatMode.value = true;
-    runOnJS(setChatModeState)(true);
-    sheetHeight.value = withTiming(SHEET_100, { duration: 350, easing: Easing.out(Easing.cubic) });
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 400);
+  function expandToComments() {
+    if (isCommentMode.value) return;
+    isCommentMode.value = true;
+    runOnJS(setCommentModeState)(true);
+    sheetHeight.value = withTiming(SHEET_100, {
+      duration: 350,
+      easing: Easing.out(Easing.cubic),
+    });
+    setTimeout(
+      () => commentsListRef.current?.scrollToEnd({ animated: false }),
+      400,
+    );
   }
 
   function collapseToDetail() {
-    isChatMode.value = false;
-    runOnJS(setChatModeState)(false);
-    sheetHeight.value = withTiming(SHEET_70, { duration: 300, easing: Easing.out(Easing.cubic) });
+    isCommentMode.value = false;
+    runOnJS(setCommentModeState)(false);
+    sheetHeight.value = withTiming(SHEET_70, {
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+    });
   }
 
   const panGesture = Gesture.Pan()
     .runOnJS(true)
     .onEnd((e) => {
-      if (e.translationY < -50 && !isChatMode.value && isMutual && !isMine) {
-        expandToChat();
-      } else if (e.translationY > 80 && isChatMode.value) {
+      if (e.translationY < -50 && !isCommentMode.value) {
+        expandToComments();
+      } else if (e.translationY > 80 && isCommentMode.value) {
         collapseToDetail();
-      } else if (e.translationY > 80 && !isChatMode.value) {
+      } else if (e.translationY > 80 && !isCommentMode.value) {
         onClose();
       }
     });
@@ -189,10 +246,23 @@ function PostBottomSheet({
     if (!post) return;
     if (post.user.isMine) return;
     const { followState, id } = post.user;
-    if (followState === "mutual") { expandToChat(); return; }
+    if (followState === "mutual") {
+      onClose();
+      router.push({
+        pathname: "/chat/[userId]",
+        params: {
+          userId: post.user.id,
+          userName: post.user.name,
+          imageUri: post.imageUri,
+          postId: post.id,
+        },
+      });
+      return;
+    }
     const next: AppFollowState = followState === "none" ? "following" : "none";
     onFollowChange(id, next);
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
   function handleMorePress() {
@@ -203,32 +273,52 @@ function PostBottomSheet({
     if (!post) return;
     setMoreMenuVisible(false);
     onFollowChange(post.user.id, "none");
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }
 
-  function handleSend() {
-    const text = inputText.trim();
-    if (!text) return;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    sendMessage(text);
-    setInputText("");
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+  async function handleSendComment() {
+    if (isSending || inputText.trim().length === 0) return;
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await sendComment(inputText);
+      setInputText("");
+      requestAnimationFrame(() =>
+        commentsListRef.current?.scrollToEnd({ animated: true }),
+      );
+    } catch (sendCommentError) {
+      if (isParticipationAccessError(sendCommentError)) {
+        await onParticipationExpired();
+      }
+    }
   }
 
   const imageSize = SCREEN_WIDTH * 0.88;
-  const previewMessages = messages.slice(-5);
 
   if (!post) {
     return (
-      <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
+      <Modal
+        transparent
+        visible={visible}
+        animationType="none"
+        onRequestClose={onClose}
+      >
         <View style={StyleSheet.absoluteFillObject} />
       </Modal>
     );
   }
 
   return (
-    <Modal transparent visible={visible} animationType="none" onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={chatModeState ? undefined : onClose}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="none"
+      onRequestClose={onClose}
+    >
+      <TouchableWithoutFeedback
+        onPress={commentModeState ? undefined : onClose}
+      >
         <View style={styles.backdrop} />
       </TouchableWithoutFeedback>
 
@@ -236,46 +326,29 @@ function PostBottomSheet({
         <Animated.View style={[styles.sheet, sheetStyle]}>
           <View style={styles.handleBar} />
 
-          {chatModeState ? (
-            /* ── 100% CHAT MODE ── */
-            <KeyboardAvoidingView
-              style={{ flex: 1 }}
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              keyboardVerticalOffset={0}
-            >
-              <LiveTimerHeaderTicking startAt={activeTopicStartAt ?? MOCK_START_AT} />
-              <ChatContextHeader
-                userName={post.user.name}
-                imageUri={post.imageUri}
-                trailing={
-                  <Pressable
-                    style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.6 }]}
-                    onPress={onClose}
-                  >
-                    <Text style={styles.closeBtnText}>✕</Text>
-                  </Pressable>
-                }
-              />
-              <ChatMessageList
-                ref={flatListRef}
-                messages={messages}
-                compact
-                contentContainerStyle={styles.messageList}
-                onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-              />
-              <ChatInputBar
-                value={inputText}
-                onChangeText={setInputText}
-                onSend={handleSend}
-                bottomInset={Math.max(insets.bottom, 16)}
-                compact
-              />
-            </KeyboardAvoidingView>
+          {commentModeState ? (
+            /* ── 100% COMMENT MODE ── */
+            <PostCommentsPanel
+              post={post}
+              comments={comments}
+              listRef={commentsListRef}
+              inputText={inputText}
+              isLoading={isLoading}
+              isRefreshing={isRefreshing}
+              isSending={isSending}
+              error={error}
+              sendError={sendError}
+              bottomInset={insets.bottom}
+              onChangeText={setInputText}
+              onSend={() => void handleSendComment()}
+              onRefresh={() => void refreshComments()}
+              onRetry={() => void refreshComments()}
+              onBackToPost={collapseToDetail}
+            />
           ) : (
             /* ── 70% DETAIL MODE ── */
             <ScrollView
               showsVerticalScrollIndicator={false}
-              scrollEnabled={false}
               contentContainerStyle={[
                 styles.detailContent,
                 { paddingBottom: Math.max(insets.bottom, 24) },
@@ -283,17 +356,29 @@ function PostBottomSheet({
             >
               <Image
                 source={{ uri: post.imageUri }}
-                style={{ width: imageSize, height: imageSize, borderRadius: 12 }}
+                style={{
+                  width: imageSize,
+                  height: imageSize,
+                  borderRadius: 12,
+                }}
                 contentFit="cover"
               />
               <View style={[styles.userRow, { width: imageSize }]}>
-                <Text style={styles.sheetUserName} numberOfLines={1}>@{post.user.name}</Text>
+                <Text style={styles.sheetUserName} numberOfLines={1}>
+                  @{post.user.name}
+                </Text>
                 <View style={styles.userRowActions}>
                   {!post.user.isMine && (
-                    <FollowButton state={post.user.followState} onPress={handleFollowPress} />
+                    <FollowButton
+                      state={post.user.followState}
+                      onPress={handleFollowPress}
+                    />
                   )}
                   <Pressable
-                    style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.6 }]}
+                    style={({ pressed }) => [
+                      styles.moreBtn,
+                      pressed && { opacity: 0.6 },
+                    ]}
                     onPress={handleMorePress}
                   >
                     <Text style={styles.moreBtnText}>⋯</Text>
@@ -306,16 +391,16 @@ function PostBottomSheet({
                   <Text style={styles.captionText}>{post.caption}</Text>
                 </View>
               ) : null}
-              {isMutual && previewMessages.length > 0 && (
-                <View style={[styles.chatPreviewContainer, { width: imageSize }]}>
-                  <Text style={styles.chatPreviewLabel}>Chat Preview</Text>
-                  <View style={styles.chatPreviewBubbles}>
-                    {previewMessages.map((msg) => (
-                      <ChatBubble key={msg.id} message={msg} compact />
-                    ))}
-                  </View>
-                </View>
-              )}
+              <View style={{ width: imageSize }}>
+                <PostCommentPreview
+                  comments={previewComments}
+                  totalCount={comments.length}
+                  isLoading={isLoading}
+                  error={error}
+                  onOpen={expandToComments}
+                  onRetry={() => void refreshComments()}
+                />
+              </View>
             </ScrollView>
           )}
         </Animated.View>
@@ -323,23 +408,46 @@ function PostBottomSheet({
 
       {moreMenuVisible && (
         <View style={styles.moreMenuLayer}>
-          <Pressable style={styles.moreMenuBackdrop} onPress={() => setMoreMenuVisible(false)} />
-          <View style={[styles.moreMenuPanel, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+          <Pressable
+            style={styles.moreMenuBackdrop}
+            onPress={() => setMoreMenuVisible(false)}
+          />
+          <View
+            style={[
+              styles.moreMenuPanel,
+              { paddingBottom: Math.max(insets.bottom, 14) },
+            ]}
+          >
             {isMutual && !isMine ? (
               <Pressable
-                style={({ pressed }) => [styles.moreMenuItem, pressed && styles.moreMenuItemPressed]}
+                style={({ pressed }) => [
+                  styles.moreMenuItem,
+                  pressed && styles.moreMenuItemPressed,
+                ]}
                 onPress={handleUnfollowFromMenu}
               >
-                <Text style={[styles.moreMenuItemText, styles.moreMenuDestructiveText]}>
+                <Text
+                  style={[
+                    styles.moreMenuItemText,
+                    styles.moreMenuDestructiveText,
+                  ]}
+                >
                   フォロー解除
                 </Text>
               </Pressable>
             ) : null}
             <Pressable
-              style={({ pressed }) => [styles.moreMenuItem, pressed && styles.moreMenuItemPressed]}
+              style={({ pressed }) => [
+                styles.moreMenuItem,
+                pressed && styles.moreMenuItemPressed,
+              ]}
               onPress={() => setMoreMenuVisible(false)}
             >
-              <Text style={[styles.moreMenuItemText, styles.moreMenuCancelText]}>キャンセル</Text>
+              <Text
+                style={[styles.moreMenuItemText, styles.moreMenuCancelText]}
+              >
+                キャンセル
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -368,7 +476,7 @@ function PostCell({
   // "Unpowered" = none → light grey, almost no glow
   const isPowered = followState === "following" || followState === "mutual";
   const borderColor = isPowered ? COLORS.neon : COLORS.unpowered;
-  const glowOpacity = isPowered ? 0.35 : 0.10;
+  const glowOpacity = isPowered ? 0.35 : 0.1;
   const glowRadius = isPowered ? 12 : 8;
   const glowColor = isPowered ? COLORS.neon : COLORS.unpowered;
 
@@ -392,10 +500,7 @@ function PostCell({
         ]}
       >
         <View
-          style={[
-            styles.cellImageWrapper,
-            { borderColor, borderWidth: 2 },
-          ]}
+          style={[styles.cellImageWrapper, { borderColor, borderWidth: 2 }]}
         >
           <Image
             source={{ uri: item.imageUri }}
@@ -416,7 +521,13 @@ function PostCell({
                   <Stop offset="1" stopColor="#070812" stopOpacity="0.6" />
                 </LinearGradient>
               </Defs>
-              <Rect x="0" y="0" width={CELL_SIZE} height={CELL_SIZE * 0.35} fill="url(#grad)" />
+              <Rect
+                x="0"
+                y="0"
+                width={CELL_SIZE}
+                height={CELL_SIZE * 0.35}
+                fill="url(#grad)"
+              />
             </Svg>
           </View>
 
@@ -445,7 +556,10 @@ function PostCell({
 
 type TabKey = "all" | "following";
 const TAB_KEYS: TabKey[] = ["all", "following"];
-const TAB_LABELS: Record<TabKey, string> = { all: "ALL", following: "FOLLOWING" };
+const TAB_LABELS: Record<TabKey, string> = {
+  all: "ALL",
+  following: "FOLLOWING",
+};
 
 function TabBar({
   activeTab,
@@ -479,7 +593,14 @@ function TabBar({
     underlineW.value = withTiming(28, { duration: 150 });
     glowOpacity.value = 0;
     glowOpacity.value = withTiming(1, { duration: 200 });
-  }, [activeTabIndex, activeTabOffset, activeTabWidth, glowOpacity, underlineW, underlineX]);
+  }, [
+    activeTabIndex,
+    activeTabOffset,
+    activeTabWidth,
+    glowOpacity,
+    underlineW,
+    underlineX,
+  ]);
 
   const underlineStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: underlineX.value }],
@@ -519,12 +640,7 @@ function TabBar({
         })}
 
         {/* Animated underline (positioned absolutely under the tab bar left area) */}
-        <Animated.View
-          style={[
-            styles.tabUnderlineAnimated,
-            underlineStyle,
-          ]}
-        />
+        <Animated.View style={[styles.tabUnderlineAnimated, underlineStyle]} />
       </View>
 
       {/* Reload button */}
@@ -558,9 +674,11 @@ function TabBar({
 
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
-  const { activeTopicStartAt } = useAppMode();
+  const queryClient = useQueryClient();
+  const { activeTopicStartAt, refreshParticipation } = useAppMode();
   const { posts, refreshPosts } = usePosts();
-  const { followingPosts, getFollowState, updateFollowState } = useFollow(posts);
+  const { followingPosts, getFollowState, updateFollowState } =
+    useFollow(posts);
   const [activeTab, setActiveTab] = useState<TabKey>("all");
   const [selectedPost, setSelectedPost] = useState<AppPost | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -569,12 +687,29 @@ export default function PostsScreen() {
   const [isReloading, setIsReloading] = useState(false);
   const reloadRotation = useSharedValue(0);
 
+  useFocusEffect(
+    useCallback(() => {
+      void queryClient.invalidateQueries({
+        queryKey: ["post-comments"],
+        refetchType: "active",
+      });
+    }, [queryClient]),
+  );
+
+  const handleParticipationExpired = useCallback(async () => {
+    await refreshParticipation();
+  }, [refreshParticipation]);
+
   async function handleReload() {
     if (isReloading) return;
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS !== "web")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsReloading(true);
     reloadRotation.value = 0;
-    reloadRotation.value = withTiming(360, { duration: 600, easing: Easing.out(Easing.cubic) });
+    reloadRotation.value = withTiming(360, {
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+    });
     try {
       await refreshPosts();
     } catch (error) {
@@ -590,7 +725,10 @@ export default function PostsScreen() {
 
   function switchTab(tab: TabKey) {
     setActiveTab(tab);
-    tabScrollRef.current?.scrollTo({ x: tab === "all" ? 0 : SCREEN_WIDTH, animated: true });
+    tabScrollRef.current?.scrollTo({
+      x: tab === "all" ? 0 : SCREEN_WIDTH,
+      animated: true,
+    });
   }
 
   function handleTabScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
@@ -599,30 +737,36 @@ export default function PostsScreen() {
     if (newTab !== activeTab) setActiveTab(newTab);
   }
 
-  const handlePostPress = useCallback((post: AppPost) => {
-    if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const merged: AppPost = {
-      ...post,
-      user: { ...post.user, followState: getFollowState(post) },
-    };
-    setSelectedPost(merged);
-    setSheetVisible(true);
-  }, [getFollowState]);
+  const handlePostPress = useCallback(
+    (post: AppPost) => {
+      if (Platform.OS !== "web")
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      const merged: AppPost = {
+        ...post,
+        user: { ...post.user, followState: getFollowState(post) },
+      };
+      setSelectedPost(merged);
+      setSheetVisible(true);
+    },
+    [getFollowState],
+  );
 
   async function handleFollowChange(userId: string, next: AppFollowState) {
     const previousState =
-      selectedPost?.user.id === userId ? selectedPost.user.followState : undefined;
+      selectedPost?.user.id === userId
+        ? selectedPost.user.followState
+        : undefined;
     setSelectedPost((prev) =>
       prev && prev.user.id === userId
         ? { ...prev, user: { ...prev.user, followState: next } }
-        : prev
+        : prev,
     );
     try {
       const resolvedState = await updateFollowState(userId, next);
       setSelectedPost((prev) =>
         prev && prev.user.id === userId
           ? { ...prev, user: { ...prev.user, followState: resolvedState } }
-          : prev
+          : prev,
       );
     } catch (error) {
       console.error("[posts] follow update failed", error);
@@ -630,7 +774,7 @@ export default function PostsScreen() {
         setSelectedPost((prev) =>
           prev && prev.user.id === userId
             ? { ...prev, user: { ...prev.user, followState: previousState } }
-            : prev
+            : prev,
         );
       }
     }
@@ -650,7 +794,7 @@ export default function PostsScreen() {
         }
       />
     ),
-    [getFollowState, handlePostPress]
+    [getFollowState, handlePostPress],
   );
 
   return (
@@ -705,9 +849,9 @@ export default function PostsScreen() {
       <PostBottomSheet
         post={selectedPost}
         visible={sheetVisible}
-        activeTopicStartAt={activeTopicStartAt}
         onClose={() => setSheetVisible(false)}
         onFollowChange={handleFollowChange}
+        onParticipationExpired={handleParticipationExpired}
       />
     </View>
   );
@@ -988,41 +1132,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "400",
     lineHeight: 22,
-  },
-
-  // ── Chat Preview ──
-  chatPreviewContainer: {
-    gap: 8,
-    paddingBottom: 4,
-  },
-  chatPreviewLabel: {
-    color: COLORS.textMuted,
-    fontSize: 11,
-    fontWeight: "500",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    paddingHorizontal: 4,
-  },
-  chatPreviewBubbles: {
-    gap: 4,
-    paddingHorizontal: 4,
-  },
-
-  // ── 100% Chat mode ──
-  closeBtn: {
-    width: 32,
-    height: 32,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  closeBtnText: {
-    color: COLORS.textMuted,
-    fontSize: 16,
-    fontWeight: "400",
-  },
-  messageList: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 6,
   },
 });

@@ -3,16 +3,51 @@ import type {
   AppChatMessage,
   AppChatMessages,
   AppMyPost,
+  AppPostComment,
   AppTopic,
   ChatMessagesInput,
   CheckInParticipationInput,
   CreateUploadUrlInput,
   CurrentParticipation,
   DataSources,
+  CreatePostCommentInput,
   SendChatMessageInput,
   SetFollowingInput,
 } from "./types";
-import { MOCK_CHAT_BY_USER, MOCK_POSTS, MOCK_USERS } from "../mock-data";
+import {
+  MOCK_CHAT_BY_USER,
+  MOCK_POST_COMMENTS_BY_POST,
+  MOCK_POSTS,
+  MOCK_USERS,
+} from "../mock-data";
+
+const mockCommentsByPost = new Map<string, AppPostComment[]>(
+  Object.entries(MOCK_POST_COMMENTS_BY_POST).map(([postId, comments]) => [
+    postId,
+    comments.map((comment) => ({
+      ...comment,
+      user: { ...comment.user },
+    })),
+  ]),
+);
+let nextMockCommentId = 1;
+
+function createMockPostComment(input: CreatePostCommentInput): AppPostComment {
+  if (input.body.length > 200) throw new Error("COMMENT_TOO_LONG");
+  if (input.body.trim().length === 0) throw new Error("EMPTY_COMMENT");
+
+  const comment: AppPostComment = {
+    id: `mock-post-comment-${nextMockCommentId++}`,
+    postId: input.postId,
+    user: { id: "me", name: "あなた", isMine: true },
+    body: input.body,
+    createdAt: new Date().toISOString(),
+  };
+  const comments = mockCommentsByPost.get(input.postId) ?? [];
+  comments.push(comment);
+  mockCommentsByPost.set(input.postId, comments);
+  return comment;
+}
 
 function buildMockTopics(): AppTopic[] {
   function getLiveStartTime(minutesAgo: number): string {
@@ -188,6 +223,17 @@ export const mockDataSources: DataSources = {
     },
     async getMyPost() {
       return MOCK_MY_POST;
+    },
+  },
+  postComments: {
+    async list(input) {
+      return (mockCommentsByPost.get(input.postId) ?? []).map((comment) => ({
+        ...comment,
+        user: { ...comment.user },
+      }));
+    },
+    async create(input) {
+      return createMockPostComment(input);
     },
   },
   follow: {

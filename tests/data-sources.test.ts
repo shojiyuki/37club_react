@@ -28,6 +28,12 @@ vi.mock("../lib/trpc", () => ({
       myCurrent: {
         query: vi.fn(),
       },
+      comments: {
+        query: vi.fn(),
+      },
+      createComment: {
+        mutate: vi.fn(),
+      },
     },
     topics: {
       list: {
@@ -102,6 +108,8 @@ function createPostDependencies() {
       senderId: "me",
       text: "hello",
     } satisfies AppChatMessage),
+    listPostComments: vi.fn().mockResolvedValue([]),
+    createPostComment: vi.fn(),
   };
 }
 
@@ -171,6 +179,8 @@ describe("participation data sources", () => {
       getChatList: vi.fn(),
       getChatMessages: vi.fn(),
       sendChatMessage: vi.fn(),
+      listPostComments: vi.fn(),
+      createPostComment: vi.fn(),
     });
 
     await expect(sources.topics.getAll()).resolves.toBe(topics);
@@ -366,6 +376,8 @@ describe("participation data sources", () => {
       getChatList: vi.fn(),
       getChatMessages: vi.fn(),
       sendChatMessage: vi.fn(),
+      listPostComments: vi.fn(),
+      createPostComment: vi.fn(),
     });
 
     await expect(sources.posts.getAll()).resolves.toBe(posts);
@@ -393,6 +405,8 @@ describe("participation data sources", () => {
       getChatList: vi.fn(),
       getChatMessages: vi.fn(),
       sendChatMessage: vi.fn(),
+      listPostComments: vi.fn(),
+      createPostComment: vi.fn(),
     });
 
     await expect(sources.posts.getMyPost()).resolves.toBe(myPost);
@@ -418,6 +432,8 @@ describe("participation data sources", () => {
       getChatList: vi.fn(),
       getChatMessages: vi.fn(),
       sendChatMessage: vi.fn(),
+      listPostComments: vi.fn(),
+      createPostComment: vi.fn(),
     });
     const input = { targetUserId: "2", following: true };
 
@@ -500,5 +516,93 @@ describe("participation data sources", () => {
 
     await expect(sources.chat.sendMessage(input)).resolves.toBe(message);
     expect(sendChatMessage).toHaveBeenCalledWith(input);
+  });
+
+  it("returns mock comments for a Post", async () => {
+    const result = await mockDataSources.postComments.list({ postId: "p1" });
+
+    expect(result[0]).toMatchObject({
+      id: expect.any(String),
+      postId: "p1",
+      user: {
+        id: expect.any(String),
+        name: expect.any(String),
+        isMine: expect.any(Boolean),
+      },
+      body: expect.any(String),
+      createdAt: expect.any(String),
+    });
+  });
+
+  it("preserves whitespace when creating a mock comment", async () => {
+    const result = await mockDataSources.postComments.create({
+      postId: "mock-whitespace-post",
+      body: "  hello  ",
+    });
+
+    expect(result.body).toBe("  hello  ");
+  });
+
+  it("maps server comment IDs to strings", async () => {
+    const listPostComments = vi.fn().mockResolvedValue([
+      {
+        id: 7,
+        postId: 11,
+        user: { id: 2, name: "hana", isMine: false },
+        body: "hello",
+        createdAt: "2026-08-29T00:00:00.000Z",
+      },
+    ]);
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi
+        .fn()
+        .mockResolvedValue(createCurrentParticipation()),
+      checkInParticipation: vi.fn(),
+      checkOutParticipation: vi.fn(),
+      createUploadUrl: vi.fn(),
+      ...createPostDependencies(),
+      listPostComments,
+      createPostComment: vi.fn(),
+    });
+
+    await expect(sources.postComments.list({ postId: "11" })).resolves.toEqual([
+      {
+        id: "7",
+        postId: "11",
+        user: { id: "2", name: "hana", isMine: false },
+        body: "hello",
+        createdAt: "2026-08-29T00:00:00.000Z",
+      },
+    ]);
+    expect(listPostComments).toHaveBeenCalledWith({ postId: 11 });
+  });
+
+  it("passes the original body to the server comment mutation", async () => {
+    const createPostComment = vi.fn().mockResolvedValue({
+      id: 8,
+      postId: 11,
+      user: { id: 1, name: "me", isMine: true },
+      body: "  hello  ",
+      createdAt: "2026-08-29T00:01:00.000Z",
+    });
+    const sources = createServerDataSources({
+      getCurrentParticipation: vi
+        .fn()
+        .mockResolvedValue(createCurrentParticipation()),
+      checkInParticipation: vi.fn(),
+      checkOutParticipation: vi.fn(),
+      createUploadUrl: vi.fn(),
+      ...createPostDependencies(),
+      listPostComments: vi.fn(),
+      createPostComment,
+    });
+
+    await expect(
+      sources.postComments.create({ postId: "11", body: "  hello  " }),
+    ).resolves.toMatchObject({ id: "8", body: "  hello  " });
+    expect(createPostComment).toHaveBeenCalledWith({
+      postId: 11,
+      body: "  hello  ",
+    });
   });
 });

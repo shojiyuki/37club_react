@@ -1,3 +1,5 @@
+import type { AppPostComment } from "./data/types";
+
 // ─── Mock data for 37Club prototype ──────────────────────────────────────────
 
 export type FollowState = "none" | "following" | "mutual";
@@ -53,6 +55,39 @@ export const MOCK_POSTS: MockPost[] = [
 ];
 
 export const FOLLOWING_POST_IDS = new Set(["p1", "p4", "p7", "p10"]);
+
+export const MOCK_POST_COMMENTS_BY_POST: Record<string, AppPostComment[]> = {
+  p1: [
+    {
+      id: "pc1",
+      postId: "p1",
+      user: { id: "u2", name: "hana_club", isMine: false },
+      body: "赤いバッグいいね！",
+      createdAt: "2026-08-29T00:00:00.000Z",
+    },
+    {
+      id: "pc2",
+      postId: "p1",
+      user: { id: "u3", name: "taro_x", isMine: false },
+      body: "今日のお題にぴったり",
+      createdAt: "2026-08-29T00:01:00.000Z",
+    },
+    {
+      id: "pc3",
+      postId: "p1",
+      user: { id: "me", name: "あなた", isMine: true },
+      body: "ありがとう！",
+      createdAt: "2026-08-29T00:02:00.000Z",
+    },
+    {
+      id: "pc4",
+      postId: "p1",
+      user: { id: "u1", name: "yuki_37", isMine: false },
+      body: "また次のTopicでも会おう",
+      createdAt: "2026-08-29T00:03:00.000Z",
+    },
+  ],
+};
 
 // ─── Chat messages ────────────────────────────────────────────────────────────
 

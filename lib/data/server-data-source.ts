@@ -6,6 +6,7 @@ import type {
   AppChatMessages,
   AppMyPost,
   AppPost,
+  AppPostComment,
   AppTopic,
   ChatMessagesInput,
   CheckInParticipationInput,
@@ -21,10 +22,16 @@ import type {
 } from "./types";
 
 type GetCurrentParticipation = () => Promise<CurrentParticipation>;
-type CheckInParticipation = (input: CheckInParticipationInput) => Promise<CurrentParticipation>;
+type CheckInParticipation = (
+  input: CheckInParticipationInput,
+) => Promise<CurrentParticipation>;
 type CheckOutParticipation = () => Promise<CurrentParticipation>;
-type CreateUploadUrl = (input: CreateUploadUrlInput) => Promise<CreateUploadUrlResponse>;
-type DiscardUpload = (input: DiscardUploadInput) => Promise<DiscardUploadResponse>;
+type CreateUploadUrl = (
+  input: CreateUploadUrlInput,
+) => Promise<CreateUploadUrlResponse>;
+type DiscardUpload = (
+  input: DiscardUploadInput,
+) => Promise<DiscardUploadResponse>;
 type GetPosts = () => Promise<AppPost[]>;
 type GetMyPost = () => Promise<AppMyPost>;
 type GetTopics = () => Promise<AppTopic[]>;
@@ -32,6 +39,24 @@ type SetFollowing = (input: SetFollowingInput) => Promise<SetFollowingResponse>;
 type GetChatList = () => Promise<AppChatListItem[]>;
 type GetChatMessages = (input: ChatMessagesInput) => Promise<AppChatMessages>;
 type SendChatMessage = (input: SendChatMessageInput) => Promise<AppChatMessage>;
+type ServerPostComment = {
+  id: number;
+  postId: number;
+  user: {
+    id: number;
+    name: string;
+    isMine: boolean;
+  };
+  body: string;
+  createdAt: string;
+};
+type ListPostComments = (input: {
+  postId: number;
+}) => Promise<ServerPostComment[]>;
+type CreatePostComment = (input: {
+  postId: number;
+  body: string;
+}) => Promise<ServerPostComment>;
 
 type ServerDataSourceDependencies = {
   getTopics: GetTopics;
@@ -46,7 +71,23 @@ type ServerDataSourceDependencies = {
   getChatList: GetChatList;
   getChatMessages: GetChatMessages;
   sendChatMessage: SendChatMessage;
+  listPostComments: ListPostComments;
+  createPostComment: CreatePostComment;
 };
+
+function toAppPostComment(comment: ServerPostComment): AppPostComment {
+  return {
+    id: String(comment.id),
+    postId: String(comment.postId),
+    user: {
+      id: String(comment.user.id),
+      name: comment.user.name,
+      isMine: comment.user.isMine,
+    },
+    body: comment.body,
+    createdAt: comment.createdAt,
+  };
+}
 
 export function createServerDataSources(
   dependencies: ServerDataSourceDependencies,
@@ -64,6 +105,21 @@ export function createServerDataSources(
       getAll: dependencies.getPosts,
       getMyPost: dependencies.getMyPost,
     },
+    postComments: {
+      list: async (input) => {
+        const result = await dependencies.listPostComments({
+          postId: Number(input.postId),
+        });
+        return result.map(toAppPostComment);
+      },
+      create: async (input) => {
+        const result = await dependencies.createPostComment({
+          postId: Number(input.postId),
+          body: input.body,
+        });
+        return toAppPostComment(result);
+      },
+    },
     follow: {
       setFollowing: dependencies.setFollowing,
     },
@@ -74,7 +130,8 @@ export function createServerDataSources(
     },
     storage: {
       createUploadUrl: dependencies.createUploadUrl,
-      discardUpload: dependencies.discardUpload ?? (async () => ({ discarded: true })),
+      discardUpload:
+        dependencies.discardUpload ?? (async () => ({ discarded: true })),
     },
   };
 }
@@ -82,12 +139,16 @@ export function createServerDataSources(
 export const serverDataSources = createServerDataSources({
   getTopics: () => apiTrpcClient.topics.list.query(),
   getCurrentParticipation: () => apiTrpcClient.participation.current.query(),
-  checkInParticipation: (input) => apiTrpcClient.participation.checkIn.mutate(input),
+  checkInParticipation: (input) =>
+    apiTrpcClient.participation.checkIn.mutate(input),
   checkOutParticipation: () => apiTrpcClient.participation.checkOut.mutate(),
-  createUploadUrl: (input) => apiTrpcClient.storage.createUploadUrl.mutate(input),
+  createUploadUrl: (input) =>
+    apiTrpcClient.storage.createUploadUrl.mutate(input),
   discardUpload: (input) => apiTrpcClient.storage.discardUpload.mutate(input),
   getPosts: () => apiTrpcClient.posts.listCurrentTopic.query(),
   getMyPost: () => apiTrpcClient.posts.myCurrent.query(),
+  listPostComments: (input) => apiTrpcClient.posts.comments.query(input),
+  createPostComment: (input) => apiTrpcClient.posts.createComment.mutate(input),
   setFollowing: async (input) => {
     const result = await apiTrpcClient.follow.setFollowing.mutate({
       targetUserId: Number(input.targetUserId),
@@ -133,7 +194,9 @@ export const serverDataSources = createServerDataSources({
     });
     return {
       id: String(result.message.id),
-      senderId: result.message.isMine ? "me" : String(result.message.senderUserId),
+      senderId: result.message.isMine
+        ? "me"
+        : String(result.message.senderUserId),
       text: result.message.body,
       createdAt: result.message.createdAt,
     };

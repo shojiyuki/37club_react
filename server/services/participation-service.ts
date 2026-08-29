@@ -13,6 +13,7 @@ import {
   getDemoParticipationEndAt,
   isConfiguredDemoTopic,
 } from "../domain/app-review";
+import { resolveParticipationExpiresAt } from "../domain/participation-access";
 import {
   DEFAULT_CHECK_IN_LOCATION_POLICY,
   validateCheckInLocation,
@@ -264,13 +265,13 @@ export class ParticipationService {
     appReviewConfig: AppReviewConfig | undefined,
     now: Date,
   ): Date | null {
-    if (!isConfiguredDemoTopic(appReviewConfig, record.topic.id)) {
-      return record.topic.endAt;
-    }
-    if (!canUseDemoTopic(appReviewConfig, record.topic.id, now)) {
-      return null;
-    }
-    return getDemoParticipationEndAt(record.participation.checkedInAt);
+    return resolveParticipationExpiresAt({
+      topicId: record.topic.id,
+      topicEndAt: record.topic.endAt,
+      checkedInAt: record.participation.checkedInAt,
+      appReviewConfig,
+      now,
+    });
   }
 
   private async deleteOldImageBestEffort(
