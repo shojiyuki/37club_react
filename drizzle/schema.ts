@@ -10,6 +10,7 @@ import {
   uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
+import { REPORT_STATUSES } from "../shared/const";
 
 /**
  * Core user table backing auth flow.
@@ -264,7 +265,7 @@ export const reports = mysqlTable(
     ])
       .notNull(),
     details: text("details"),
-    status: mysqlEnum("status", ["pending", "action_taken", "dismissed"])
+    status: mysqlEnum("status", REPORT_STATUSES)
       .default("pending")
       .notNull(),
     reviewedAt: timestamp("reviewedAt"),

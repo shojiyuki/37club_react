@@ -1,4 +1,5 @@
 import type { Report } from "../../drizzle/schema";
+import type { ReportStatus } from "../../shared/const";
 import {
   areUsersEffectiveActiveInSameTopic,
   isParticipationEffective,
@@ -26,7 +27,7 @@ export type ReportResponse = {
   id: number;
   targetType: ReportTargetType;
   targetId: number;
-  status: "pending" | "action_taken" | "dismissed";
+  status: ReportStatus;
   createdAt: string;
 };
 
@@ -125,6 +126,31 @@ export class ReportService {
       return;
     }
 
+    if (target.targetType === "message") {
+      const isRoomMember =
+        target.chatRoomId !== null &&
+        (await this.reportRepository.isChatRoomMember(
+          target.chatRoomId,
+          reporterUserId,
+        ));
+      const [isMutual, sameTopic] = isRoomMember
+        ? await Promise.all([
+            this.chatRepository.areMutual(
+              reporterUserId,
+              target.targetUserId,
+            ),
+            this.chatRepository.areActiveInSameTopic(
+              reporterUserId,
+              target.targetUserId,
+            ),
+          ])
+        : [false, false];
+      if (!isRoomMember || !isMutual || !sameTopic) {
+        throw new ReportServiceError("REPORT_TARGET_NOT_ACCESSIBLE");
+      }
+      return;
+    }
+
     const [reporter, targetUser] = await Promise.all([
       this.participationRepository.findActiveByUserId(reporterUserId),
       this.participationRepository.findActiveByUserId(target.targetUserId),
@@ -138,25 +164,6 @@ export class ReportService {
       appReviewConfig,
       now: this.clock(),
     });
-
-    if (target.targetType === "message") {
-      const isRoomMember =
-        target.chatRoomId !== null &&
-        (await this.reportRepository.isChatRoomMember(
-          target.chatRoomId,
-          reporterUserId,
-        ));
-      const isMutual = isRoomMember
-        ? await this.chatRepository.areMutual(
-            reporterUserId,
-            target.targetUserId,
-          )
-        : false;
-      if (!isRoomMember || !isMutual || !sameTopic) {
-        throw new ReportServiceError("REPORT_TARGET_NOT_ACCESSIBLE");
-      }
-      return;
-    }
 
     const sharedRoom = sameTopic
       ? false

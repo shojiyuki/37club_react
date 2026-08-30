@@ -123,6 +123,18 @@ function findAllByType(node: unknown, type: string): ReactElement[] {
   );
 }
 
+function getResolvedTextColor(element: ReactElement | undefined) {
+  const style = (element?.props as { style?: unknown }).style;
+  const entries = (Array.isArray(style) ? style : [style]).filter(
+    (entry): entry is { color?: string } =>
+      Boolean(entry) && typeof entry === "object",
+  );
+  return entries.reduce<string | undefined>(
+    (color, entry) => entry.color ?? color,
+    undefined,
+  );
+}
+
 describe("safety components", () => {
   it("invalidates an old inline report from the outer post identity at commit", async () => {
     const oldSessionKey = createPostSafetySessionKey({
@@ -473,6 +485,26 @@ describe("safety components", () => {
     expect(findByLabel(tree, "このユーザーを通報")).toBeDefined();
     expect(findByLabel(tree, "このユーザーをブロック")).toBeDefined();
     expect(findByLabel(tree, "フォロー解除")).toBeUndefined();
+  });
+
+  it("renders every safety action with the standard white text color", () => {
+    const tree = SafetyActionMenuContent({
+      contentReportLabel: "投稿を通報",
+      onReportContent: vi.fn(),
+      onReportUser: vi.fn(),
+      onBlockUser: vi.fn(),
+      onUnfollow: vi.fn(),
+      onClose: vi.fn(),
+    });
+
+    expect(
+      [
+        "投稿を通報",
+        "このユーザーを通報",
+        "このユーザーをブロック",
+        "フォロー解除",
+      ].map((label) => getResolvedTextColor(findByText(tree, label))),
+    ).toEqual(["#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF"]);
   });
 
   it("submits the selected reason and omits empty details", () => {

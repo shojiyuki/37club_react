@@ -1,6 +1,7 @@
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 
 import type { AppRouter } from "@/server/routers";
+import type { ReportStatus } from "@shared/const";
 
 type RouterInputs = inferRouterInputs<AppRouter>;
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -42,7 +43,7 @@ export type AppReportResult = {
   id: string;
   targetType: AppReportTargetType;
   targetId: string;
-  status: "pending" | "action_taken" | "dismissed";
+  status: ReportStatus;
   createdAt: string;
 };
 

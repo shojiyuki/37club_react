@@ -24,7 +24,6 @@ type MenuAction = {
   key: string;
   label: string;
   onPress?: () => void;
-  tone?: "default" | "destructive";
 };
 
 const COLORS = {
@@ -33,7 +32,6 @@ const COLORS = {
   border: "rgba(255,255,255,0.08)",
   text: "#FFFFFF",
   muted: "#B7BDD6",
-  destructive: "#FF7A7A",
   pressed: "#161B33",
 };
 
@@ -92,7 +90,6 @@ export function SafetyActionMenuContent({
       key: "report-content",
       label: contentReportLabel,
       onPress: onReportContent,
-      tone: "destructive",
     });
   }
   if (onReportUser) {
@@ -100,7 +97,6 @@ export function SafetyActionMenuContent({
       key: "report-user",
       label: "このユーザーを通報",
       onPress: onReportUser,
-      tone: "destructive",
     });
   }
   if (onBlockUser) {
@@ -108,7 +104,6 @@ export function SafetyActionMenuContent({
       key: "block-user",
       label: "このユーザーをブロック",
       onPress: onBlockUser,
-      tone: "destructive",
     });
   }
   if (onUnfollow) {
@@ -116,7 +111,6 @@ export function SafetyActionMenuContent({
       key: "unfollow",
       label: "フォロー解除",
       onPress: onUnfollow,
-      tone: "destructive",
     });
   }
 
@@ -141,14 +135,7 @@ export function SafetyActionMenuContent({
               ]}
               onPress={action.onPress}
             >
-              <Text
-                style={[
-                  styles.actionText,
-                  action.tone === "destructive" && styles.destructiveText,
-                ]}
-              >
-                {action.label}
-              </Text>
+              <Text style={styles.actionText}>{action.label}</Text>
             </Pressable>
           ))}
           <Pressable
@@ -217,9 +204,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     textAlign: "center",
-  },
-  destructiveText: {
-    color: COLORS.destructive,
   },
   cancelButton: {
     marginTop: 2,

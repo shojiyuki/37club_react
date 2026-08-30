@@ -1,6 +1,7 @@
 import { getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
+import { REPORT_STATUSES } from "../shared/const";
 import {
   messages,
   postComments,
@@ -11,6 +12,15 @@ import {
 } from "../drizzle/schema";
 
 describe("UGC safety schema", () => {
+  it("shares the report status contract with the database schema", () => {
+    expect(REPORT_STATUSES).toEqual([
+      "pending",
+      "action_taken",
+      "dismissed",
+    ]);
+    expect(reports.status.enumValues).toEqual(REPORT_STATUSES);
+  });
+
   it("exposes report and block tables", () => {
     expect(getTableName(reports)).toBe("reports");
     expect(getTableName(userBlocks)).toBe("userBlocks");

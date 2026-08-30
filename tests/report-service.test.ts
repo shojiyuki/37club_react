@@ -181,13 +181,18 @@ function createBlockRepository(input: {
   };
 }
 
-function createChatRepository(input: { mutual?: boolean }): ChatRepository {
+function createChatRepository(input: {
+  mutual?: boolean;
+  activeSameTopic?: boolean;
+}): ChatRepository {
   return {
     userExists: vi.fn(),
     findUserById: vi.fn(),
     listMutualUsers: vi.fn(),
     areMutual: vi.fn().mockResolvedValue(input.mutual ?? true),
-    areActiveInSameTopic: vi.fn(),
+    areActiveInSameTopic: vi
+      .fn()
+      .mockResolvedValue(input.activeSameTopic ?? true),
     findLatestPostImageStorageKey: vi.fn(),
     findRoomIdForUsers: vi.fn(),
     createRoomForUsers: vi.fn(),
@@ -205,6 +210,7 @@ function createReportService(
     sharedRoom?: boolean;
     roomMember?: boolean;
     mutual?: boolean;
+    activeSameTopic?: boolean;
     reporterTopicId?: number;
     targetTopicId?: number;
     expiredDemo?: boolean;
@@ -323,17 +329,34 @@ describe("ReportService", () => {
     ).rejects.toEqual(new ReportServiceError("REPORT_TARGET_NOT_ACCESSIBLE"));
   });
 
-  it("requires effective active participation in the same Topic for messages", async () => {
+  it("requires the current active same Topic chat policy for messages", async () => {
     const reports = createReportRepository({
       resolveTarget: vi.fn().mockResolvedValue(createTarget("message")),
     });
 
     await expect(
-      createReportService({ reports, targetTopicId: 21 }).create(1, {
+      createReportService({ reports, activeSameTopic: false }).create(1, {
         ...validInput,
         targetType: "message",
       }),
     ).rejects.toEqual(new ReportServiceError("REPORT_TARGET_NOT_ACCESSIBLE"));
+  });
+
+  it("allows a visible message when the chat policy is active after the demo participation window", async () => {
+    const reports = createReportRepository({
+      resolveTarget: vi.fn().mockResolvedValue(createTarget("message")),
+    });
+
+    await expect(
+      createReportService({
+        reports,
+        activeSameTopic: true,
+        expiredDemo: true,
+      }).create(1, {
+        ...validInput,
+        targetType: "message",
+      }),
+    ).resolves.toMatchObject({ targetType: "message", targetId: 10 });
   });
 
   it("allows a user target from a shared room without a current shared Topic", async () => {
