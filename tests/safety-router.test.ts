@@ -59,6 +59,7 @@ describe("reports router", () => {
 
   it.each([
     { ...validInput, targetType: "profile" },
+    { ...validInput, targetType: "post_comment" },
     { ...validInput, reason: "dislike" },
   ])("rejects invalid report enums", async (input) => {
     await expect(

@@ -13,6 +13,7 @@ export function usePosts() {
   return {
     posts: postsQuery.data ?? [],
     refreshPosts: postsQuery.refetch,
+    isRefreshing: postsQuery.isRefetching,
     isLoading: postsQuery.isLoading,
     error: postsQuery.error,
   };

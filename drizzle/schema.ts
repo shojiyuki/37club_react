@@ -210,32 +210,6 @@ export const posts = mysqlTable(
 export type Post = typeof posts.$inferSelect;
 export type InsertPost = typeof posts.$inferInsert;
 
-export const postComments = mysqlTable(
-  "postComments",
-  {
-    id: int("id").autoincrement().primaryKey(),
-    postId: int("postId")
-      .notNull()
-      .references(() => posts.id, { onDelete: "restrict" }),
-    userId: int("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "restrict" }),
-    body: text("body").notNull(),
-    hiddenAt: timestamp("hiddenAt"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-  },
-  (table) => [
-    index("post_comments_post_created_id_idx").on(
-      table.postId,
-      table.createdAt,
-      table.id,
-    ),
-  ],
-);
-
-export type PostComment = typeof postComments.$inferSelect;
-export type InsertPostComment = typeof postComments.$inferInsert;
-
 export const reports = mysqlTable(
   "reports",
   {
@@ -243,13 +217,7 @@ export const reports = mysqlTable(
     reporterUserId: int("reporterUserId")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
-    targetType: mysqlEnum("targetType", [
-      "post",
-      "post_comment",
-      "message",
-      "user",
-    ])
-      .notNull(),
+    targetType: mysqlEnum("targetType", ["post", "message", "user"]).notNull(),
     targetId: int("targetId").notNull(),
     targetUserId: int("targetUserId")
       .notNull()
@@ -262,12 +230,9 @@ export const reports = mysqlTable(
       "personal_information",
       "impersonation",
       "other",
-    ])
-      .notNull(),
+    ]).notNull(),
     details: text("details"),
-    status: mysqlEnum("status", REPORT_STATUSES)
-      .default("pending")
-      .notNull(),
+    status: mysqlEnum("status", REPORT_STATUSES).default("pending").notNull(),
     reviewedAt: timestamp("reviewedAt"),
     reviewedByUserId: int("reviewedByUserId").references(() => users.id, {
       onDelete: "restrict",

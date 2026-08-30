@@ -57,7 +57,7 @@ function createTarget(
     targetType,
     targetId: 10,
     targetUserId,
-    topicId: targetType === "post" || targetType === "post_comment" ? 20 : null,
+    topicId: targetType === "post" ? 20 : null,
     chatRoomId: targetType === "message" ? 5 : null,
   };
 }
@@ -235,7 +235,7 @@ function createReportService(
 }
 
 describe("ReportService", () => {
-  it.each(["post", "post_comment", "message", "user"] as const)(
+  it.each(["post", "message", "user"] as const)(
     "creates a %s report with the authenticated reporter",
     async (targetType) => {
       const reports = createReportRepository({

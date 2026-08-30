@@ -8,7 +8,6 @@ import { DrizzleBlockRepository } from "../server/repositories/block-repository"
 import { DrizzleChatRepository } from "../server/repositories/chat-repository";
 import { DrizzleFollowRepository } from "../server/repositories/follow-repository";
 import { DrizzleParticipationRepository } from "../server/repositories/participation-repository";
-import { DrizzlePostCommentsRepository } from "../server/repositories/post-comments-repository";
 import { DrizzlePostsRepository } from "../server/repositories/posts-repository";
 
 type RecordedQuery = { sql: string; params: unknown[] };
@@ -99,33 +98,6 @@ describe("moderation policy repositories", () => {
     ).resolves.toBeUndefined();
 
     const sql = client.queries[0]?.sql ?? "";
-    expect(sql).toContain("`posts`.`hiddenAt` is null");
-    expect(sql).toContain("`users`.`suspendedAt` is null");
-    expect(sql).toContain("`users`.`deletedAt` is null");
-  });
-
-  it("treats a hidden Post or unavailable Post author as a missing comment target", async () => {
-    const client = useRecordingDatabase([[]]);
-
-    await expect(
-      new DrizzlePostCommentsRepository().findPostById(11),
-    ).resolves.toBeUndefined();
-
-    const sql = client.queries[0]?.sql ?? "";
-    expect(sql).toContain("`posts`.`hiddenAt` is null");
-    expect(sql).toContain("`users`.`suspendedAt` is null");
-    expect(sql).toContain("`users`.`deletedAt` is null");
-  });
-
-  it("filters hidden comments, hidden Posts, and unavailable comment authors", async () => {
-    const client = useRecordingDatabase([[]]);
-
-    await expect(
-      new DrizzlePostCommentsRepository().listByPostId(11),
-    ).resolves.toEqual([]);
-
-    const sql = client.queries[0]?.sql ?? "";
-    expect(sql).toContain("`postComments`.`hiddenAt` is null");
     expect(sql).toContain("`posts`.`hiddenAt` is null");
     expect(sql).toContain("`users`.`suspendedAt` is null");
     expect(sql).toContain("`users`.`deletedAt` is null");

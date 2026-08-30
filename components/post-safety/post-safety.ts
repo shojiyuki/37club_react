@@ -2,15 +2,9 @@ import type { AppReportReason, CreateReportInput } from "../../lib/data/types";
 
 export type ReportSelection =
   | { targetType: "post"; targetId: string; targetLabel: "投稿" }
-  | {
-      targetType: "post_comment";
-      targetId: string;
-      targetLabel: "コメント";
-    }
   | { targetType: "user"; targetId: string; targetLabel: "ユーザー" };
 
 type PostSafetyTargetInput = {
-  targetType: "post" | "post_comment";
   targetId: string;
   userId: string;
 };
@@ -59,15 +53,11 @@ export function createPostSafetySessionKey({
 }
 
 export function createPostSafetyTarget({
-  targetType,
   targetId,
   userId,
 }: PostSafetyTargetInput): PostSafetyTarget {
   return {
-    contentReport:
-      targetType === "post"
-        ? { targetType, targetId, targetLabel: "投稿" }
-        : { targetType, targetId, targetLabel: "コメント" },
+    contentReport: { targetType: "post", targetId, targetLabel: "投稿" },
     userReport: {
       targetType: "user",
       targetId: userId,

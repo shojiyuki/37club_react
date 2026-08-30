@@ -11,7 +11,6 @@ export const BLOCKS_QUERY_KEY = ["blocks", "list"] as const;
 export const BLOCK_MUTATION_KEY = ["blocks", "create"] as const;
 export const UNBLOCK_MUTATION_KEY = ["blocks", "remove"] as const;
 const POSTS_QUERY_KEY = ["posts", "current-topic"] as const;
-const POST_COMMENTS_QUERY_KEY = ["post-comments"] as const;
 const CHAT_LIST_QUERY_KEY = ["chat", "list"] as const;
 const CHAT_MESSAGES_QUERY_KEY = ["chat", "messages"] as const;
 
@@ -26,7 +25,6 @@ export function getBlockInvalidationKeys() {
   return [
     BLOCKS_QUERY_KEY,
     POSTS_QUERY_KEY,
-    POST_COMMENTS_QUERY_KEY,
     CHAT_LIST_QUERY_KEY,
     CHAT_MESSAGES_QUERY_KEY,
   ] as const;

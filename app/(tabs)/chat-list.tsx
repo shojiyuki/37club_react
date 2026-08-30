@@ -1,5 +1,13 @@
 import React from "react";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -118,9 +126,24 @@ function ChatRow({
 export default function ChatListScreen() {
   const insets = useSafeAreaInsets();
   const { activeTopicStartAt } = useAppMode();
-  const { chatUsers } = useChatList();
+  const { chatUsers, refreshChatList, isRefreshing } = useChatList();
 
-  function handleUserPress(userId: string, userName: string, imageUri?: string) {
+  async function handleRefresh() {
+    if (isRefreshing) return;
+    try {
+      const result = await refreshChatList();
+      if (result.isError) throw result.error;
+    } catch (error) {
+      console.error("[chat-list] refresh failed", error);
+      Alert.alert("更新できませんでした", "時間をおいてもう一度お試しください");
+    }
+  }
+
+  function handleUserPress(
+    userId: string,
+    userName: string,
+    imageUri?: string,
+  ) {
     router.push({
       pathname: "/chat/[userId]",
       params: { userId, userName, imageUri },
@@ -135,31 +158,45 @@ export default function ChatListScreen() {
         <Text style={styles.headerTitle}>CHAT</Text>
       </View>
 
-      {chatUsers.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>相互フォローのユーザーがいません</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={chatUsers}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => {
-            return (
-              <ChatRow
-                userId={item.id}
-                userName={item.name}
-                imageUri={item.imageUri}
-                lastMessage={item.lastMessage}
-                hasUnread={item.hasUnread}
-                onPress={() => handleUserPress(item.id, item.name, item.imageUri)}
-              />
-            );
-          }}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      <FlatList
+        data={chatUsers}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.list,
+          chatUsers.length === 0 && styles.listEmpty,
+        ]}
+        renderItem={({ item }) => {
+          return (
+            <ChatRow
+              userId={item.id}
+              userName={item.name}
+              imageUri={item.imageUri}
+              lastMessage={item.lastMessage}
+              hasUnread={item.hasUnread}
+              onPress={() => handleUserPress(item.id, item.name, item.imageUri)}
+            />
+          );
+        }}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>
+              相互フォローのユーザーがいません
+            </Text>
+          </View>
+        }
+        refreshControl={
+          <RefreshControl
+            colors={[COLORS.neon]}
+            onRefresh={() => {
+              void handleRefresh();
+            }}
+            refreshing={isRefreshing}
+            tintColor={COLORS.neon}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
@@ -184,6 +221,9 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     paddingTop: 4,
+  },
+  listEmpty: {
+    flexGrow: 1,
   },
   row: {
     flexDirection: "row",

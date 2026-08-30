@@ -7,7 +7,6 @@ import type {
   AppChatMessages,
   AppMyPost,
   AppPost,
-  AppPostComment,
   AppReportResult,
   AppTopic,
   ChatMessagesInput,
@@ -63,25 +62,6 @@ type CreateBlock = (input: {
 type RemoveBlock = (input: {
   targetUserId: number;
 }) => Promise<{ targetUserId: number; removed: true }>;
-type ServerPostComment = {
-  id: number;
-  postId: number;
-  user: {
-    id: number;
-    name: string;
-    isMine: boolean;
-  };
-  body: string;
-  createdAt: string;
-};
-type ListPostComments = (input: {
-  postId: number;
-}) => Promise<ServerPostComment[]>;
-type CreatePostComment = (input: {
-  postId: number;
-  body: string;
-}) => Promise<ServerPostComment>;
-
 type ServerDataSourceDependencies = {
   getTopics: GetTopics;
   getCurrentParticipation: GetCurrentParticipation;
@@ -99,8 +79,6 @@ type ServerDataSourceDependencies = {
   listBlocks: ListBlocks;
   createBlock: CreateBlock;
   removeBlock: RemoveBlock;
-  listPostComments: ListPostComments;
-  createPostComment: CreatePostComment;
 };
 
 function parseCanonicalPositiveInteger(
@@ -122,21 +100,9 @@ function parseCanonicalPositiveInteger(
   return parsed;
 }
 
-function toAppPostComment(comment: ServerPostComment): AppPostComment {
-  return {
-    id: String(comment.id),
-    postId: String(comment.postId),
-    user: {
-      id: String(comment.user.id),
-      name: comment.user.name,
-      isMine: comment.user.isMine,
-    },
-    body: comment.body,
-    createdAt: comment.createdAt,
-  };
-}
-
-function toAppReportResult(result: Awaited<ReturnType<CreateReport>>): AppReportResult {
+function toAppReportResult(
+  result: Awaited<ReturnType<CreateReport>>,
+): AppReportResult {
   return {
     id: String(result.id),
     targetType: result.targetType,
@@ -147,7 +113,9 @@ function toAppReportResult(result: Awaited<ReturnType<CreateReport>>): AppReport
 }
 
 function toAppBlockedUser(
-  user: Awaited<ReturnType<ListBlocks>>[number] | Awaited<ReturnType<CreateBlock>>,
+  user:
+    | Awaited<ReturnType<ListBlocks>>[number]
+    | Awaited<ReturnType<CreateBlock>>,
 ): AppBlockedUser {
   return {
     userId: String(user.userId),
@@ -171,21 +139,6 @@ export function createServerDataSources(
     posts: {
       getAll: dependencies.getPosts,
       getMyPost: dependencies.getMyPost,
-    },
-    postComments: {
-      list: async (input) => {
-        const result = await dependencies.listPostComments({
-          postId: Number(input.postId),
-        });
-        return result.map(toAppPostComment);
-      },
-      create: async (input) => {
-        const result = await dependencies.createPostComment({
-          postId: Number(input.postId),
-          body: input.body,
-        });
-        return toAppPostComment(result);
-      },
     },
     follow: {
       setFollowing: dependencies.setFollowing,
@@ -255,8 +208,6 @@ export const serverDataSources = createServerDataSources({
   discardUpload: (input) => apiTrpcClient.storage.discardUpload.mutate(input),
   getPosts: () => apiTrpcClient.posts.listCurrentTopic.query(),
   getMyPost: () => apiTrpcClient.posts.myCurrent.query(),
-  listPostComments: (input) => apiTrpcClient.posts.comments.query(input),
-  createPostComment: (input) => apiTrpcClient.posts.createComment.mutate(input),
   createReport: (input) => apiTrpcClient.reports.create.mutate(input),
   listBlocks: () => apiTrpcClient.blocks.list.query(),
   createBlock: (input) => apiTrpcClient.blocks.create.mutate(input),

@@ -36,11 +36,7 @@ export function PostSafetyInlineStage({
       <SafetyActionMenu
         visible={visible}
         presentation="inline"
-        contentReportLabel={
-          target.contentReport.targetType === "post"
-            ? "投稿を通報"
-            : "コメントを通報"
-        }
+        contentReportLabel="投稿を通報"
         onReportContent={() =>
           dispatch({
             type: "open_report",
@@ -62,11 +58,7 @@ export function PostSafetyInlineStage({
             sessionKey: stage.sessionKey,
           })
         }
-        onUnfollow={
-          target.contentReport.targetType === "post" && isMutualPost
-            ? onUnfollow
-            : undefined
-        }
+        onUnfollow={isMutualPost ? onUnfollow : undefined}
         onClose={() => dispatch({ type: "close_stage" })}
       />
     );

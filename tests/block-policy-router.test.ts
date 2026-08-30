@@ -54,43 +54,6 @@ beforeEach(() => {
   vi.mocked(getDb).mockReset();
 });
 
-function createActiveParticipationRow(): unknown[] {
-  const now = "2026-08-29 00:10:00.000";
-  return [
-    10,
-    1,
-    20,
-    30,
-    "active",
-    now,
-    null,
-    now,
-    now,
-    20,
-    now,
-    "2027-08-29 00:10:00.000",
-    "test",
-    35,
-    139,
-    "red",
-    now,
-    now,
-    30,
-    1,
-    20,
-    "users/1/posts/mine.jpg",
-    "mine",
-    null,
-    now,
-    now,
-  ];
-}
-
-function createPostRow(): unknown[] {
-  const now = "2026-08-29 00:10:00.000";
-  return [11, 2, 20, "users/2/posts/target.jpg", "target", null, now, now];
-}
-
 describe("block policy router mapping", () => {
   it("maps a blocked follow to a direction-neutral FORBIDDEN response", async () => {
     const caller = createCaller([[[1]]]);
@@ -113,19 +76,6 @@ describe("block policy router mapping", () => {
 
     await expect(
       caller.chat.sendMessage({ targetUserId: 2, body: "hello" }),
-    ).rejects.toMatchObject({ code: "FORBIDDEN", message: "USER_BLOCKED" });
-  });
-
-  it("maps a blocked comment creation to a direction-neutral FORBIDDEN response", async () => {
-    const caller = createCaller([
-      [createActiveParticipationRow()],
-      [],
-      [createPostRow()],
-      [[1]],
-    ]);
-
-    await expect(
-      caller.posts.createComment({ postId: 11, body: "hello" }),
     ).rejects.toMatchObject({ code: "FORBIDDEN", message: "USER_BLOCKED" });
   });
 });

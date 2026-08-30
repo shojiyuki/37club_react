@@ -9,7 +9,7 @@ import {
   reducePostSafetyFlow,
   submitPostSafetyBlock,
   submitPostSafetyReport,
-} from "../components/post-comments/post-safety";
+} from "../components/post-safety/post-safety";
 
 const TEST_SESSION_KEY = "post-safety-test";
 
@@ -72,9 +72,9 @@ describe("safety operation controller", () => {
 
   it("keeps report submission mutation-only until guarded success requests one committed alert transition", async () => {
     const selection = {
-      targetType: "post_comment" as const,
-      targetId: "comment-1",
-      targetLabel: "コメント" as const,
+      targetType: "post" as const,
+      targetId: "post-1",
+      targetLabel: "投稿" as const,
     };
     let state = reducePostSafetyFlow(createInitialPostSafetyFlowState(), {
       type: "open_report",
@@ -103,8 +103,8 @@ describe("safety operation controller", () => {
     });
 
     expect(report).toHaveBeenCalledWith({
-      targetType: "post_comment",
-      targetId: "comment-1",
+      targetType: "post",
+      targetId: "post-1",
       reason: "spam",
       details: "details",
     });

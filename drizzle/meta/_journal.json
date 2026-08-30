@@ -85,6 +85,13 @@
       "when": 1788006551257,
       "tag": "0011_dizzy_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1788089465836,
+      "tag": "0012_remove_post_comments",
+      "breakpoints": true
     }
   ]
 }

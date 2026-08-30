@@ -71,12 +71,6 @@ describe("DrizzleReportRepository", () => {
       hiddenColumns: ["`posts`.`hiddenAt`"],
     },
     {
-      targetType: "post_comment" as const,
-      row: [10, 2, 20, null],
-      table: "`postComments`",
-      hiddenColumns: ["`postComments`.`hiddenAt`", "`posts`.`hiddenAt`"],
-    },
-    {
       targetType: "message" as const,
       row: [10, 2, null, 5],
       table: "`messages`",
@@ -99,8 +93,7 @@ describe("DrizzleReportRepository", () => {
         targetType,
         targetId: 10,
         targetUserId: targetType === "user" ? 10 : 2,
-        topicId:
-          targetType === "post" || targetType === "post_comment" ? 20 : null,
+        topicId: targetType === "post" ? 20 : null,
         chatRoomId: targetType === "message" ? 5 : null,
       });
 

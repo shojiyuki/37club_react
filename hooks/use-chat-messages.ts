@@ -6,7 +6,8 @@ import type { AppChatMessage } from "@/lib/data/types";
 
 export type ChatMessage = AppChatMessage;
 
-export const chatMessagesQueryKey = (userId?: string) => ["chat", "messages", userId ?? ""] as const;
+export const chatMessagesQueryKey = (userId?: string) =>
+  ["chat", "messages", userId ?? ""] as const;
 
 export function useChatMessages(userId?: string) {
   const queryClient = useQueryClient();
@@ -16,11 +17,7 @@ export function useChatMessages(userId?: string) {
     queryFn: () => dataSources.chat.messages({ targetUserId: userId ?? "" }),
     enabled: !!userId,
   });
-  const { data, error, isLoading, refetch } = messagesQuery;
-
-  const resetMessages = useCallback(() => {
-    refetch();
-  }, [refetch]);
+  const { data, error, isLoading, isRefetching, refetch } = messagesQuery;
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -31,7 +28,9 @@ export function useChatMessages(userId?: string) {
         targetUserId: userId,
         body: trimmed,
       });
-      queryClient.setQueryData<Awaited<ReturnType<typeof dataSources.chat.messages>>>(queryKey, (current) => ({
+      queryClient.setQueryData<
+        Awaited<ReturnType<typeof dataSources.chat.messages>>
+      >(queryKey, (current) => ({
         targetUser: current?.targetUser ?? { id: userId, name: "ユーザー" },
         messages: [...(current?.messages ?? []), message],
       }));
@@ -42,7 +41,8 @@ export function useChatMessages(userId?: string) {
   return {
     messages: data?.messages ?? [],
     sendMessage,
-    resetMessages,
+    refreshMessages: refetch,
+    isRefreshing: isRefetching,
     isLoading,
     error,
   };

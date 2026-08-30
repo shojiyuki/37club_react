@@ -15,6 +15,8 @@ export function useChatList() {
 
   return {
     chatUsers: chatListQuery.data ?? [],
+    refreshChatList: chatListQuery.refetch,
+    isRefreshing: chatListQuery.isRefetching,
     isLoading: chatListQuery.isLoading,
     error: chatListQuery.error,
   };

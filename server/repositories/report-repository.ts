@@ -3,7 +3,6 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import {
   chatRoomMembers,
   messages,
-  postComments,
   posts,
   reports,
   users,
@@ -96,27 +95,6 @@ export class DrizzleReportRepository implements ReportRepository {
         .where(
           and(
             eq(posts.id, targetId),
-            isNull(posts.hiddenAt),
-            isNull(users.suspendedAt),
-            isNull(users.deletedAt),
-          ),
-        )
-        .limit(1);
-    } else if (targetType === "post_comment") {
-      [row] = await db
-        .select({
-          targetId: postComments.id,
-          targetUserId: postComments.userId,
-          topicId: posts.topicId,
-          chatRoomId: sql<null>`null`,
-        })
-        .from(postComments)
-        .innerJoin(posts, eq(postComments.postId, posts.id))
-        .innerJoin(users, eq(postComments.userId, users.id))
-        .where(
-          and(
-            eq(postComments.id, targetId),
-            isNull(postComments.hiddenAt),
             isNull(posts.hiddenAt),
             isNull(users.suspendedAt),
             isNull(users.deletedAt),

@@ -84,7 +84,7 @@ describe("safety cache", () => {
     });
   });
 
-  it("invalidates all five user-visible prefixes after block success", async () => {
+  it("invalidates all four user-visible prefixes after block success", async () => {
     const { useBlockActions } = await loadModule();
     const actions = useBlockActions();
 
@@ -94,13 +94,12 @@ describe("safety cache", () => {
     expect(testState.invalidateQueries.mock.calls).toEqual([
       [{ queryKey: ["blocks", "list"] }],
       [{ queryKey: ["posts", "current-topic"] }],
-      [{ queryKey: ["post-comments"] }],
       [{ queryKey: ["chat", "list"] }],
       [{ queryKey: ["chat", "messages"] }],
     ]);
   });
 
-  it("invalidates all five user-visible prefixes after unblock success", async () => {
+  it("invalidates all four user-visible prefixes after unblock success", async () => {
     const { useBlockActions } = await loadModule();
     const actions = useBlockActions();
 
@@ -109,7 +108,6 @@ describe("safety cache", () => {
     expect(testState.invalidateQueries.mock.calls).toEqual([
       [{ queryKey: ["blocks", "list"] }],
       [{ queryKey: ["posts", "current-topic"] }],
-      [{ queryKey: ["post-comments"] }],
       [{ queryKey: ["chat", "list"] }],
       [{ queryKey: ["chat", "messages"] }],
     ]);

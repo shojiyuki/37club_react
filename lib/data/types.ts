@@ -21,7 +21,7 @@ export type SetFollowingResponse = {
   followState: AppFollowState;
 };
 
-export type AppReportTargetType = "post" | "post_comment" | "message" | "user";
+export type AppReportTargetType = "post" | "message" | "user";
 
 export type AppReportReason =
   | "spam"
@@ -117,27 +117,6 @@ export type AppMyPost = {
   topicLabel: string;
 };
 
-export type AppPostComment = {
-  id: string;
-  postId: string;
-  user: {
-    id: string;
-    name: string;
-    isMine: boolean;
-  };
-  body: string;
-  createdAt: string;
-};
-
-export type PostCommentsInput = {
-  postId: string;
-};
-
-export type CreatePostCommentInput = {
-  postId: string;
-  body: string;
-};
-
 export type AppTopic = {
   id: string;
   startAt: string;
@@ -162,10 +141,6 @@ export interface DataSources {
     getAll(): Promise<AppPost[]>;
     getMyPost(): Promise<AppMyPost>;
   };
-  postComments: {
-    list(input: PostCommentsInput): Promise<AppPostComment[]>;
-    create(input: CreatePostCommentInput): Promise<AppPostComment>;
-  };
   follow: {
     setFollowing(input: SetFollowingInput): Promise<SetFollowingResponse>;
   };
@@ -175,9 +150,9 @@ export interface DataSources {
   blocks: {
     list(): Promise<AppBlockedUser[]>;
     create(input: { targetUserId: string }): Promise<AppBlockedUser>;
-    remove(
-      input: { targetUserId: string },
-    ): Promise<{ targetUserId: string; removed: true }>;
+    remove(input: {
+      targetUserId: string;
+    }): Promise<{ targetUserId: string; removed: true }>;
   };
   chat: {
     list(): Promise<AppChatListItem[]>;

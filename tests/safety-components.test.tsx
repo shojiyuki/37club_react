@@ -53,8 +53,8 @@ import {
   getReportTargetKey,
   reducePostSafetyFlow,
   type PostSafetyFlowEvent,
-} from "../components/post-comments/post-safety";
-import { PostSafetyInlineStage } from "../components/post-comments/PostSafetyInlineStage";
+} from "../components/post-safety/post-safety";
+import { PostSafetyInlineStage } from "../components/post-safety/PostSafetyInlineStage";
 
 function findByLabel(node: unknown, label: string): ReactElement | undefined {
   if (!isValidElement(node)) return undefined;
@@ -270,10 +270,9 @@ describe("safety components", () => {
     expect(state).toEqual(createInitialPostSafetyFlowState());
   });
 
-  it("selects exact content, author, and block targets for posts and comments", () => {
+  it("selects exact content, author, and block targets for posts", () => {
     expect(
       createPostSafetyTarget({
-        targetType: "post",
         targetId: "post-1",
         userId: "user-1",
       }),
@@ -290,32 +289,6 @@ describe("safety components", () => {
       },
       blockUserId: "user-1",
     });
-    expect(
-      createPostSafetyTarget({
-        targetType: "post_comment",
-        targetId: "comment-1",
-        userId: "user-2",
-      }),
-    ).toEqual({
-      contentReport: {
-        targetType: "post_comment",
-        targetId: "comment-1",
-        targetLabel: "コメント",
-      },
-      userReport: {
-        targetType: "user",
-        targetId: "user-2",
-        targetLabel: "ユーザー",
-      },
-      blockUserId: "user-2",
-    });
-    expect(
-      getReportTargetKey({
-        targetType: "post_comment",
-        targetId: "comment-1",
-        targetLabel: "コメント",
-      }),
-    ).toBe("post_comment:comment-1");
     expect(
       getReportTargetKey({
         targetType: "user",
@@ -348,7 +321,6 @@ describe("safety components", () => {
 
   it("selects inline shared containers for every post safety stage", () => {
     const target = createPostSafetyTarget({
-      targetType: "post",
       targetId: "post-1",
       userId: "user-2",
     });

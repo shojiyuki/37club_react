@@ -8,8 +8,8 @@ import {
   usePostSafetyFlow,
   type UsePostSafetyFlowParams,
   type UsePostSafetyFlowResult,
-} from "../components/post-comments/usePostSafetyFlow";
-import type { PostSafetyTarget } from "../components/post-comments/post-safety";
+} from "../components/post-safety/usePostSafetyFlow";
+import type { PostSafetyTarget } from "../components/post-safety/post-safety";
 
 Object.assign(globalThis, { React });
 

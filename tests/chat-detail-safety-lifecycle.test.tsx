@@ -8,12 +8,15 @@ Object.assign(globalThis, { React });
 
 const nativeActions = vi.hoisted(() => new Map<string, () => void>());
 const runtime = vi.hoisted(() => ({
+  alert: vi.fn(),
   blockUser: vi.fn<(input: { targetUserId: string }) => Promise<unknown>>(),
   chat: {
     messages: [
       { id: "m-received", senderId: "2", text: "received" },
       { id: "m-mine", senderId: "me", text: "mine" },
     ],
+    isRefreshing: false,
+    refreshMessages: vi.fn<() => Promise<{ isError: boolean }>>(),
     sendMessage: vi.fn<(text: string) => Promise<unknown>>(),
   },
   input: null as null | {
@@ -22,15 +25,19 @@ const runtime = vi.hoisted(() => ({
     onSend: () => void;
   },
   list: null as null | {
+    onContentSizeChange?: () => void;
     onLongPress?: (message: {
       id: string;
       senderId: string;
       text: string;
     }) => void;
+    onRefresh?: () => Promise<void>;
+    refreshing?: boolean;
   },
   params: { userId: "2", userName: "Other" },
   report: vi.fn<(input: unknown) => Promise<unknown>>(),
   routerBack: vi.fn(),
+  scrollToEnd: vi.fn(),
 }));
 
 vi.mock("expo-haptics", () => ({
@@ -67,7 +74,7 @@ vi.mock("react-native", async () => {
 
   return {
     ActivityIndicator: () => null,
-    Alert: { alert: vi.fn() },
+    Alert: { alert: runtime.alert },
     FlatList: () => null,
     KeyboardAvoidingView: Passthrough,
     Modal: ({
@@ -115,14 +122,20 @@ vi.mock("../components/chat", () => ({
     runtime.input = props;
     return null;
   },
-  ChatMessageList: (
-    props: typeof runtime.list extends null
-      ? never
-      : NonNullable<typeof runtime.list>,
-  ) => {
-    runtime.list = props;
-    return null;
-  },
+  ChatMessageList: React.forwardRef(
+    (
+      props: typeof runtime.list extends null
+        ? never
+        : NonNullable<typeof runtime.list>,
+      ref,
+    ) => {
+      React.useImperativeHandle(ref, () => ({
+        scrollToEnd: runtime.scrollToEnd,
+      }));
+      runtime.list = props;
+      return null;
+    },
+  ),
 }));
 
 vi.mock("../components/LiveTimerHeader", () => ({
@@ -169,6 +182,8 @@ function createContainer() {
     window: testWindow,
     document: testDocument,
     IS_REACT_ACT_ENVIRONMENT: true,
+    requestAnimationFrame: vi.fn(() => 1),
+    cancelAnimationFrame: vi.fn(),
   });
 
   return {
@@ -196,12 +211,16 @@ describe("mounted chat detail safety flow", () => {
 
   beforeEach(async () => {
     nativeActions.clear();
+    runtime.alert.mockReset();
     runtime.blockUser.mockReset();
+    runtime.chat.isRefreshing = false;
+    runtime.chat.refreshMessages.mockReset();
     runtime.chat.sendMessage.mockReset();
     runtime.input = null;
     runtime.list = null;
     runtime.report.mockReset();
     runtime.routerBack.mockReset();
+    runtime.scrollToEnd.mockReset();
     root = createRoot(createContainer());
     await act(async () => {
       root.render(<ChatDetailScreen />);
@@ -354,6 +373,45 @@ describe("mounted chat detail safety flow", () => {
 
     expect(runtime.input?.value).toBe("");
     expect(runtime.routerBack).not.toHaveBeenCalled();
+  });
+
+  it("refreshes messages without clearing the draft and scrolls to the latest message", async () => {
+    runtime.chat.refreshMessages.mockResolvedValue({ isError: false });
+    await act(async () => {
+      runtime.input?.onChangeText("draft");
+    });
+
+    await act(async () => {
+      await runtime.list?.onRefresh?.();
+    });
+
+    expect(runtime.chat.refreshMessages).toHaveBeenCalledOnce();
+    expect(runtime.input?.value).toBe("draft");
+    expect(runtime.scrollToEnd).not.toHaveBeenCalled();
+
+    await act(async () => {
+      runtime.list?.onContentSizeChange?.();
+    });
+
+    expect(runtime.scrollToEnd).toHaveBeenCalledWith({ animated: false });
+  });
+
+  it("keeps the draft and shows a notice when message refresh fails", async () => {
+    runtime.chat.refreshMessages.mockResolvedValue({ isError: true });
+    await act(async () => {
+      runtime.input?.onChangeText("draft");
+    });
+
+    await act(async () => {
+      await runtime.list?.onRefresh?.();
+    });
+
+    expect(runtime.input?.value).toBe("draft");
+    expect(runtime.scrollToEnd).not.toHaveBeenCalled();
+    expect(runtime.alert).toHaveBeenCalledWith(
+      "更新できませんでした",
+      "時間をおいてもう一度お試しください",
+    );
   });
 });
 

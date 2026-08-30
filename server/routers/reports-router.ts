@@ -34,7 +34,7 @@ function toTrpcError(error: unknown): never {
 
 const reportInput = z
   .object({
-    targetType: z.enum(["post", "post_comment", "message", "user"]),
+    targetType: z.enum(["post", "message", "user"]),
     targetId: z.number().int().positive(),
     reason: z.enum([
       "spam",

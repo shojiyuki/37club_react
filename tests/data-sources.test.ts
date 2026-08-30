@@ -28,12 +28,6 @@ vi.mock("../lib/trpc", () => ({
       myCurrent: {
         query: vi.fn(),
       },
-      comments: {
-        query: vi.fn(),
-      },
-      createComment: {
-        mutate: vi.fn(),
-      },
     },
     topics: {
       list: {
@@ -145,8 +139,6 @@ function createDependencies(
       senderId: "me",
       text: "hello",
     } satisfies AppChatMessage),
-    listPostComments: vi.fn().mockResolvedValue([]),
-    createPostComment: vi.fn(),
     createReport: vi.fn().mockResolvedValue({
       id: 1,
       targetType: "post",
@@ -557,96 +549,6 @@ describe("participation data sources", () => {
     expect(sendChatMessage).toHaveBeenCalledWith(input);
   });
 
-  it("returns mock comments for a Post", async () => {
-    const result = await mockDataSources.postComments.list({ postId: "p1" });
-
-    expect(result[0]).toMatchObject({
-      id: expect.any(String),
-      postId: "p1",
-      user: {
-        id: expect.any(String),
-        name: expect.any(String),
-        isMine: expect.any(Boolean),
-      },
-      body: expect.any(String),
-      createdAt: expect.any(String),
-    });
-  });
-
-  it("preserves whitespace when creating a mock comment", async () => {
-    const result = await mockDataSources.postComments.create({
-      postId: "mock-whitespace-post",
-      body: "  hello  ",
-    });
-
-    expect(result.body).toBe("  hello  ");
-  });
-
-  it("maps server comment IDs to strings", async () => {
-    const listPostComments = vi.fn().mockResolvedValue([
-      {
-        id: 7,
-        postId: 11,
-        user: { id: 2, name: "hana", isMine: false },
-        body: "hello",
-        createdAt: "2026-08-29T00:00:00.000Z",
-      },
-    ]);
-    const sources = createServerDataSources(
-      createDependencies({
-        getCurrentParticipation: vi
-          .fn()
-          .mockResolvedValue(createCurrentParticipation()),
-        checkInParticipation: vi.fn(),
-        checkOutParticipation: vi.fn(),
-        createUploadUrl: vi.fn(),
-        listPostComments,
-        createPostComment: vi.fn(),
-      }),
-    );
-
-    await expect(sources.postComments.list({ postId: "11" })).resolves.toEqual([
-      {
-        id: "7",
-        postId: "11",
-        user: { id: "2", name: "hana", isMine: false },
-        body: "hello",
-        createdAt: "2026-08-29T00:00:00.000Z",
-      },
-    ]);
-    expect(listPostComments).toHaveBeenCalledWith({ postId: 11 });
-  });
-
-  it("passes the original body to the server comment mutation", async () => {
-    const createPostComment = vi.fn().mockResolvedValue({
-      id: 8,
-      postId: 11,
-      user: { id: 1, name: "me", isMine: true },
-      body: "  hello  ",
-      createdAt: "2026-08-29T00:01:00.000Z",
-    });
-    const sources = createServerDataSources(
-      createDependencies({
-        getCurrentParticipation: vi
-          .fn()
-          .mockResolvedValue(createCurrentParticipation()),
-        checkInParticipation: vi.fn(),
-        checkOutParticipation: vi.fn(),
-        createUploadUrl: vi.fn(),
-        listPostComments: vi.fn(),
-        createPostComment,
-      }),
-    );
-
-    await expect(
-      sources.postComments.create({ postId: "11", body: "  hello  " }),
-    ).resolves.toMatchObject({ id: "8", body: "  hello  " });
-    expect(createPostComment).toHaveBeenCalledWith({
-      postId: 11,
-      body: "  hello  ",
-    });
-  });
-
   it("converts report and block IDs to app strings", async () => {
     const now = "2026-08-29T00:00:00.000Z";
     const createReport = vi.fn().mockResolvedValue({
@@ -656,9 +558,9 @@ describe("participation data sources", () => {
       status: "pending",
       createdAt: now,
     });
-    const listBlocks = vi.fn().mockResolvedValue([
-      { userId: 2, name: "user_2", blockedAt: now },
-    ]);
+    const listBlocks = vi
+      .fn()
+      .mockResolvedValue([{ userId: 2, name: "user_2", blockedAt: now }]);
     const createBlock = vi.fn().mockResolvedValue({
       userId: 2,
       name: "user_2",
@@ -699,21 +601,21 @@ describe("participation data sources", () => {
     await expect(sources.blocks.list()).resolves.toEqual([
       { userId: "2", name: "user_2", blockedAt: now } satisfies AppBlockedUser,
     ]);
-    await expect(
-      sources.blocks.create({ targetUserId: "2" }),
-    ).resolves.toEqual({
-      userId: "2",
-      name: "user_2",
-      blockedAt: now,
-    } satisfies AppBlockedUser);
+    await expect(sources.blocks.create({ targetUserId: "2" })).resolves.toEqual(
+      {
+        userId: "2",
+        name: "user_2",
+        blockedAt: now,
+      } satisfies AppBlockedUser,
+    );
     expect(createBlock).toHaveBeenCalledWith({ targetUserId: 2 });
 
-    await expect(
-      sources.blocks.remove({ targetUserId: "2" }),
-    ).resolves.toEqual({
-      targetUserId: "2",
-      removed: true,
-    });
+    await expect(sources.blocks.remove({ targetUserId: "2" })).resolves.toEqual(
+      {
+        targetUserId: "2",
+        removed: true,
+      },
+    );
     expect(removeBlock).toHaveBeenCalledWith({ targetUserId: 2 });
   });
 
@@ -770,12 +672,12 @@ describe("participation data sources", () => {
         }),
       );
 
-      await expect(
-        sources.blocks.create({ targetUserId }),
-      ).rejects.toThrow("INVALID_TARGET_USER_ID");
-      await expect(
-        sources.blocks.remove({ targetUserId }),
-      ).rejects.toThrow("INVALID_TARGET_USER_ID");
+      await expect(sources.blocks.create({ targetUserId })).rejects.toThrow(
+        "INVALID_TARGET_USER_ID",
+      );
+      await expect(sources.blocks.remove({ targetUserId })).rejects.toThrow(
+        "INVALID_TARGET_USER_ID",
+      );
       expect(createBlock).not.toHaveBeenCalled();
       expect(removeBlock).not.toHaveBeenCalled();
     },
@@ -797,7 +699,7 @@ describe("participation data sources", () => {
     expect(second).toEqual(first);
   });
 
-  it("filters blocked users from mock posts comments and chat surfaces", async () => {
+  it("filters blocked users from mock posts and chat surfaces", async () => {
     expect(
       (await mockDataSources.chat.list()).some((user) => user.id === "u1"),
     ).toBe(true);
@@ -805,10 +707,8 @@ describe("participation data sources", () => {
     await mockDataSources.blocks.create({ targetUserId: "u1" });
 
     const posts = await mockDataSources.posts.getAll();
-    const comments = await mockDataSources.postComments.list({ postId: "p1" });
     const chatUsers = await mockDataSources.chat.list();
     expect(posts.some((post) => post.user.id === "u1")).toBe(false);
-    expect(comments.some((comment) => comment.user.id === "u1")).toBe(false);
     expect(chatUsers.some((user) => user.id === "u1")).toBe(false);
   });
 

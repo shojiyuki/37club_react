@@ -4,7 +4,7 @@
 
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -70,9 +70,12 @@ export default function ChatDetailScreen() {
     postId,
   });
 
-  const { messages, sendMessage } = useChatMessages(userId);
+  const { messages, sendMessage, refreshMessages, isRefreshing } =
+    useChatMessages(userId);
   const [inputText, setInputText] = useState("");
   const flatListRef = useRef<FlatList>(null);
+  const shouldScrollAfterRefresh = useRef(false);
+  const [refreshScrollRequest, setRefreshScrollRequest] = useState(0);
   const [safetyState, safetyDispatch] = React.useReducer(
     reduceChatSafetyFlow,
     undefined,
@@ -82,6 +85,18 @@ export default function ChatDetailScreen() {
   const safetySessionKey = createChatSafetySessionKey({ userId });
   const { report } = useReport();
   const { blockUser } = useBlockActions();
+
+  const scrollToLatestAfterRefresh = useCallback(() => {
+    if (!shouldScrollAfterRefresh.current) return;
+    shouldScrollAfterRefresh.current = false;
+    flatListRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
+  React.useEffect(() => {
+    if (refreshScrollRequest === 0) return;
+    const animationFrame = requestAnimationFrame(scrollToLatestAfterRefresh);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [refreshScrollRequest, scrollToLatestAfterRefresh]);
 
   React.useEffect(() => {
     safetyDispatch({ type: "reset" });
@@ -123,6 +138,19 @@ export default function ChatDetailScreen() {
       },
       onUserBlocked: () => router.back(),
     });
+  }
+
+  async function handleRefresh() {
+    if (isRefreshing) return;
+    try {
+      const result = await refreshMessages();
+      if (result.isError) throw result.error;
+      shouldScrollAfterRefresh.current = true;
+      setRefreshScrollRequest((current) => current + 1);
+    } catch (error) {
+      console.error("[chat] refresh failed", error);
+      Alert.alert("更新できませんでした", "時間をおいてもう一度お試しください");
+    }
   }
 
   function handleBack() {
@@ -194,9 +222,14 @@ export default function ChatDetailScreen() {
         ref={flatListRef}
         messages={messages}
         contentContainerStyle={styles.messageList}
+        onContentSizeChange={scrollToLatestAfterRefresh}
         onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
         emptyText="最初のメッセージを送ろう"
         onLongPress={handleMessageLongPress}
+        onRefresh={() => {
+          void handleRefresh();
+        }}
+        refreshing={isRefreshing}
       />
 
       {/* Input bar */}
@@ -252,6 +285,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   messageList: {
+    flexGrow: 1,
     paddingHorizontal: 16,
     paddingVertical: 16,
     gap: 6,

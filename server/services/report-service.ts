@@ -106,7 +106,7 @@ export class ReportService {
     reporterUserId: number,
     target: ReportTarget,
   ): Promise<void> {
-    if (target.targetType === "post" || target.targetType === "post_comment") {
+    if (target.targetType === "post") {
       const reporter =
         await this.participationRepository.findActiveByUserId(reporterUserId);
       const appReviewConfig = reporter
@@ -135,10 +135,7 @@ export class ReportService {
         ));
       const [isMutual, sameTopic] = isRoomMember
         ? await Promise.all([
-            this.chatRepository.areMutual(
-              reporterUserId,
-              target.targetUserId,
-            ),
+            this.chatRepository.areMutual(reporterUserId, target.targetUserId),
             this.chatRepository.areActiveInSameTopic(
               reporterUserId,
               target.targetUserId,

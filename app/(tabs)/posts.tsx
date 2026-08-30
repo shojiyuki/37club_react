@@ -1,7 +1,6 @@
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
-import { router, useFocusEffect } from "expo-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { router } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
@@ -12,6 +11,7 @@ import {
   NativeSyntheticEvent,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,7 +21,6 @@ import {
 import Svg, { Defs, LinearGradient, Path, Rect, Stop } from "react-native-svg";
 import Animated, {
   Easing,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -29,22 +28,14 @@ import Animated, {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
-import {
-  PostCommentPreview,
-  PostCommentsPanel,
-} from "@/components/post-comments";
-import { createPostSafetyTarget } from "@/components/post-comments/post-safety";
-import { usePostSafetyFlow } from "@/components/post-comments/usePostSafetyFlow";
+import { createPostSafetyTarget } from "@/components/post-safety/post-safety";
+import { usePostSafetyFlow } from "@/components/post-safety/usePostSafetyFlow";
 import { useBlockActions } from "@/hooks/use-blocks";
 import { useFollow } from "@/hooks/use-follow";
-import {
-  isParticipationAccessError,
-  usePostComments,
-} from "@/hooks/use-post-comments";
 import { usePosts } from "@/hooks/use-posts";
 import { useReport } from "@/hooks/use-report";
 import { useAppMode } from "@/lib/app-mode-context";
-import type { AppFollowState, AppPost, AppPostComment } from "@/lib/data/types";
+import type { AppFollowState, AppPost } from "@/lib/data/types";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -72,7 +63,6 @@ const CELL_SIZE =
 const COMMENT_HEIGHT = 22;
 
 const SHEET_70 = SCREEN_HEIGHT * 0.7;
-const SHEET_100 = SCREEN_HEIGHT * 0.96;
 const LIVE_REMAINING_MS = 4 * 60 * 1000 + 52 * 1000;
 // Start time for ticking timer (mock: 37min - LIVE_REMAINING_MS ago)
 const MOCK_START_AT = new Date(
@@ -147,7 +137,6 @@ interface BottomSheetProps {
     userId: string,
     next: AppFollowState,
   ) => void | Promise<void>;
-  onParticipationExpired: () => Promise<unknown>;
 }
 
 function PostBottomSheet({
@@ -155,15 +144,9 @@ function PostBottomSheet({
   visible,
   onClose,
   onFollowChange,
-  onParticipationExpired,
 }: BottomSheetProps) {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(SHEET_70);
-  const sheetHeight = useSharedValue(SHEET_70);
-  const isCommentMode = useSharedValue(false);
-  const [commentModeState, setCommentModeState] = useState(false);
-  const [inputText, setInputText] = useState("");
-  const commentsListRef = useRef<FlatList<AppPostComment>>(null);
   const { report } = useReport();
   const { blockUser } = useBlockActions();
   const postId = post?.id;
@@ -182,78 +165,26 @@ function PostBottomSheet({
     onReportSuccess: handleReportSuccess,
     onClose,
   });
-  const {
-    comments,
-    previewComments,
-    refreshComments,
-    sendComment,
-    isLoading,
-    isRefreshing,
-    isSending,
-    error,
-    sendError,
-  } = usePostComments({ postId, enabled: visible && Boolean(postId) });
-
   React.useEffect(() => {
     if (visible && postId) {
-      isCommentMode.value = false;
-      setCommentModeState(false);
-      setInputText("");
       translateY.value = withTiming(0, {
-        duration: 350,
-        easing: Easing.out(Easing.cubic),
-      });
-      sheetHeight.value = withTiming(SHEET_70, {
         duration: 350,
         easing: Easing.out(Easing.cubic),
       });
     } else if (!visible) {
       translateY.value = withTiming(SHEET_70, { duration: 300 });
     }
-  }, [isCommentMode, postId, sheetHeight, translateY, visible]);
-
-  React.useEffect(() => {
-    if (error && isParticipationAccessError(error)) {
-      void onParticipationExpired();
-    }
-  }, [error, onParticipationExpired]);
+  }, [postId, translateY, visible]);
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
-    height: sheetHeight.value,
+    height: SHEET_70,
   }));
-
-  function expandToComments() {
-    if (isCommentMode.value) return;
-    isCommentMode.value = true;
-    runOnJS(setCommentModeState)(true);
-    sheetHeight.value = withTiming(SHEET_100, {
-      duration: 350,
-      easing: Easing.out(Easing.cubic),
-    });
-    setTimeout(
-      () => commentsListRef.current?.scrollToEnd({ animated: false }),
-      400,
-    );
-  }
-
-  function collapseToDetail() {
-    isCommentMode.value = false;
-    runOnJS(setCommentModeState)(false);
-    sheetHeight.value = withTiming(SHEET_70, {
-      duration: 300,
-      easing: Easing.out(Easing.cubic),
-    });
-  }
 
   const panGesture = Gesture.Pan()
     .runOnJS(true)
     .onEnd((e) => {
-      if (e.translationY < -50 && !isCommentMode.value) {
-        expandToComments();
-      } else if (e.translationY > 80 && isCommentMode.value) {
-        collapseToDetail();
-      } else if (e.translationY > 80 && !isCommentMode.value) {
+      if (e.translationY > 80) {
         onClose();
       }
     });
@@ -285,20 +216,8 @@ function PostBottomSheet({
     if (!post || post.user.isMine) return;
     postSafety.openMenu(
       createPostSafetyTarget({
-        targetType: "post",
         targetId: post.id,
         userId: post.user.id,
-      }),
-    );
-  }
-
-  function handleOpenCommentActions(comment: AppPostComment) {
-    if (comment.user.isMine) return;
-    postSafety.openMenu(
-      createPostSafetyTarget({
-        targetType: "post_comment",
-        targetId: comment.id,
-        userId: comment.user.id,
       }),
     );
   }
@@ -308,23 +227,6 @@ function PostBottomSheet({
     onFollowChange(post.user.id, "none");
     if (Platform.OS !== "web")
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }
-
-  async function handleSendComment() {
-    if (isSending || inputText.trim().length === 0) return;
-    if (Platform.OS !== "web")
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await sendComment(inputText);
-      setInputText("");
-      requestAnimationFrame(() =>
-        commentsListRef.current?.scrollToEnd({ animated: true }),
-      );
-    } catch (sendCommentError) {
-      if (isParticipationAccessError(sendCommentError)) {
-        await onParticipationExpired();
-      }
-    }
   }
 
   const imageSize = SCREEN_WIDTH * 0.88;
@@ -349,9 +251,7 @@ function PostBottomSheet({
       animationType="none"
       onRequestClose={postSafety.requestClose}
     >
-      <TouchableWithoutFeedback
-        onPress={commentModeState ? undefined : onClose}
-      >
+      <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.backdrop} />
       </TouchableWithoutFeedback>
 
@@ -359,88 +259,55 @@ function PostBottomSheet({
         <Animated.View style={[styles.sheet, sheetStyle]}>
           <View style={styles.handleBar} />
 
-          {commentModeState ? (
-            /* ── 100% COMMENT MODE ── */
-            <PostCommentsPanel
-              post={post}
-              comments={comments}
-              listRef={commentsListRef}
-              inputText={inputText}
-              isLoading={isLoading}
-              isRefreshing={isRefreshing}
-              isSending={isSending}
-              error={error}
-              sendError={sendError}
-              bottomInset={insets.bottom}
-              onChangeText={setInputText}
-              onSend={() => void handleSendComment()}
-              onRefresh={() => void refreshComments()}
-              onRetry={() => void refreshComments()}
-              onBackToPost={collapseToDetail}
-              onOpenCommentActions={handleOpenCommentActions}
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.detailContent,
+              { paddingBottom: Math.max(insets.bottom, 24) },
+            ]}
+          >
+            <Image
+              source={{ uri: post.imageUri }}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: 12,
+              }}
+              contentFit="cover"
             />
-          ) : (
-            /* ── 70% DETAIL MODE ── */
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={[
-                styles.detailContent,
-                { paddingBottom: Math.max(insets.bottom, 24) },
-              ]}
-            >
-              <Image
-                source={{ uri: post.imageUri }}
-                style={{
-                  width: imageSize,
-                  height: imageSize,
-                  borderRadius: 12,
-                }}
-                contentFit="cover"
-              />
-              <View style={[styles.userRow, { width: imageSize }]}>
-                <Text style={styles.sheetUserName} numberOfLines={1}>
-                  @{post.user.name}
-                </Text>
-                <View style={styles.userRowActions}>
-                  {!post.user.isMine && (
-                    <FollowButton
-                      state={post.user.followState}
-                      onPress={handleFollowPress}
-                    />
-                  )}
-                  {!isMine ? (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`${post.user.name}の投稿メニュー`}
-                      style={({ pressed }) => [
-                        styles.moreBtn,
-                        pressed && { opacity: 0.6 },
-                      ]}
-                      onPress={handleMorePress}
-                    >
-                      <Text style={styles.moreBtnText}>⋯</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
+            <View style={[styles.userRow, { width: imageSize }]}>
+              <Text style={styles.sheetUserName} numberOfLines={1}>
+                @{post.user.name}
+              </Text>
+              <View style={styles.userRowActions}>
+                {!post.user.isMine && (
+                  <FollowButton
+                    state={post.user.followState}
+                    onPress={handleFollowPress}
+                  />
+                )}
+                {!isMine ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${post.user.name}の投稿メニュー`}
+                    style={({ pressed }) => [
+                      styles.moreBtn,
+                      pressed && { opacity: 0.6 },
+                    ]}
+                    onPress={handleMorePress}
+                  >
+                    <Text style={styles.moreBtnText}>⋯</Text>
+                  </Pressable>
+                ) : null}
               </View>
-              <View style={[styles.divider, { width: imageSize }]} />
-              {post.caption ? (
-                <View style={[styles.captionBox, { width: imageSize }]}>
-                  <Text style={styles.captionText}>{post.caption}</Text>
-                </View>
-              ) : null}
-              <View style={{ width: imageSize }}>
-                <PostCommentPreview
-                  comments={previewComments}
-                  totalCount={comments.length}
-                  isLoading={isLoading}
-                  error={error}
-                  onOpen={expandToComments}
-                  onRetry={() => void refreshComments()}
-                />
+            </View>
+            <View style={[styles.divider, { width: imageSize }]} />
+            {post.caption ? (
+              <View style={[styles.captionBox, { width: imageSize }]}>
+                <Text style={styles.captionText}>{post.caption}</Text>
               </View>
-            </ScrollView>
-          )}
+            ) : null}
+          </ScrollView>
         </Animated.View>
       </GestureDetector>
 
@@ -667,8 +534,7 @@ function TabBar({
 
 export default function PostsScreen() {
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
-  const { activeTopicStartAt, refreshParticipation } = useAppMode();
+  const { activeTopicStartAt } = useAppMode();
   const { posts, refreshPosts } = usePosts();
   const { followingPosts, getFollowState, updateFollowState } =
     useFollow(posts);
@@ -679,19 +545,6 @@ export default function PostsScreen() {
   const tabScrollRef = useRef<ScrollView>(null);
   const [isReloading, setIsReloading] = useState(false);
   const reloadRotation = useSharedValue(0);
-
-  useFocusEffect(
-    useCallback(() => {
-      void queryClient.invalidateQueries({
-        queryKey: ["post-comments"],
-        refetchType: "active",
-      });
-    }, [queryClient]),
-  );
-
-  const handleParticipationExpired = useCallback(async () => {
-    await refreshParticipation();
-  }, [refreshParticipation]);
 
   async function handleReload() {
     if (isReloading) return;
@@ -704,9 +557,11 @@ export default function PostsScreen() {
       easing: Easing.out(Easing.cubic),
     });
     try {
-      await refreshPosts();
+      const result = await refreshPosts();
+      if (result.isError) throw result.error;
     } catch (error) {
       console.error("[posts] refresh failed", error);
+      Alert.alert("更新できませんでした", "時間をおいてもう一度お試しください");
     } finally {
       setIsReloading(false);
     }
@@ -821,6 +676,16 @@ export default function PostsScreen() {
             numColumns={NUM_COLS}
             contentContainerStyle={styles.gridContent}
             columnWrapperStyle={styles.row}
+            refreshControl={
+              <RefreshControl
+                colors={[COLORS.neon]}
+                onRefresh={() => {
+                  void handleReload();
+                }}
+                refreshing={isReloading}
+                tintColor={COLORS.neon}
+              />
+            }
             showsVerticalScrollIndicator={false}
             scrollEnabled
           />
@@ -833,6 +698,16 @@ export default function PostsScreen() {
             numColumns={NUM_COLS}
             contentContainerStyle={styles.gridContent}
             columnWrapperStyle={styles.row}
+            refreshControl={
+              <RefreshControl
+                colors={[COLORS.neon]}
+                onRefresh={() => {
+                  void handleReload();
+                }}
+                refreshing={isReloading}
+                tintColor={COLORS.neon}
+              />
+            }
             showsVerticalScrollIndicator={false}
             scrollEnabled
           />
@@ -844,7 +719,6 @@ export default function PostsScreen() {
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
         onFollowChange={handleFollowChange}
-        onParticipationExpired={handleParticipationExpired}
       />
     </View>
   );
@@ -910,6 +784,7 @@ const styles = StyleSheet.create({
 
   // ── Grid ──
   gridContent: {
+    flexGrow: 1,
     paddingHorizontal: OUTER_MARGIN,
     paddingBottom: 24,
     paddingTop: 4,

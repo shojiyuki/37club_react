@@ -17,27 +17,36 @@ function applyFollowStateToPosts(
   );
 }
 
+function createFollowStates(posts: AppPost[]): Record<string, AppFollowState> {
+  const states: Record<string, AppFollowState> = {};
+  posts.forEach((post) => {
+    states[post.user.id] = post.user.followState;
+  });
+  return states;
+}
+
+function areFollowStatesEqual(
+  current: Record<string, AppFollowState>,
+  next: Record<string, AppFollowState>,
+): boolean {
+  const currentUserIds = Object.keys(current);
+  const nextUserIds = Object.keys(next);
+  return (
+    currentUserIds.length === nextUserIds.length &&
+    nextUserIds.every((userId) => current[userId] === next[userId])
+  );
+}
+
 export function useFollow(posts: AppPost[]) {
   const queryClient = useQueryClient();
-  const [followStates, setFollowStates] = useState<Record<string, AppFollowState>>(() => {
-    const init: Record<string, AppFollowState> = {};
-    posts.forEach((post) => {
-      init[post.user.id] = post.user.followState;
-    });
-    return init;
-  });
+  const [followStates, setFollowStates] = useState<
+    Record<string, AppFollowState>
+  >(() => createFollowStates(posts));
 
   useEffect(() => {
-    setFollowStates((prev) => {
-      const next = { ...prev };
-      let changed = false;
-      posts.forEach((post) => {
-        if (next[post.user.id] === undefined) {
-          next[post.user.id] = post.user.followState;
-          changed = true;
-        }
-      });
-      return changed ? next : prev;
+    setFollowStates((current) => {
+      const next = createFollowStates(posts);
+      return areFollowStatesEqual(current, next) ? current : next;
     });
   }, [posts]);
 
@@ -53,9 +62,16 @@ export function useFollow(posts: AppPost[]) {
           targetUserId: userId,
           following: next === "following" || next === "mutual",
         });
-        setFollowStates((prev) => ({ ...prev, [result.targetUserId]: result.followState }));
+        setFollowStates((prev) => ({
+          ...prev,
+          [result.targetUserId]: result.followState,
+        }));
         queryClient.setQueryData<AppPost[]>(POSTS_QUERY_KEY, (current) =>
-          applyFollowStateToPosts(current, result.targetUserId, result.followState),
+          applyFollowStateToPosts(
+            current,
+            result.targetUserId,
+            result.followState,
+          ),
         );
         return result.followState;
       } catch (error) {
@@ -71,7 +87,7 @@ export function useFollow(posts: AppPost[]) {
 
   const getFollowState = useCallback(
     (post: AppPost) => followStates[post.user.id] ?? post.user.followState,
-    [followStates]
+    [followStates],
   );
 
   const followingPosts = useMemo(
@@ -80,7 +96,7 @@ export function useFollow(posts: AppPost[]) {
         const state = followStates[post.user.id] ?? post.user.followState;
         return state === "following" || state === "mutual";
       }),
-    [followStates, posts]
+    [followStates, posts],
   );
 
   return {
