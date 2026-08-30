@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtime = vi.hoisted(() => ({
+  invalidateQueries: vi.fn(),
   refetch: vi.fn(),
+  sendMessage: vi.fn(),
   setQueryData: vi.fn(),
   useQuery: vi.fn(),
 }));
@@ -17,7 +19,10 @@ vi.mock("react", async () => {
 
 vi.mock("@tanstack/react-query", () => ({
   useQuery: (options: unknown) => runtime.useQuery(options),
-  useQueryClient: () => ({ setQueryData: runtime.setQueryData }),
+  useQueryClient: () => ({
+    invalidateQueries: runtime.invalidateQueries,
+    setQueryData: runtime.setQueryData,
+  }),
 }));
 
 vi.mock("@/lib/data", () => ({
@@ -25,7 +30,7 @@ vi.mock("@/lib/data", () => ({
     chat: {
       list: vi.fn(),
       messages: vi.fn(),
-      sendMessage: vi.fn(),
+      sendMessage: runtime.sendMessage,
     },
     posts: { getAll: vi.fn() },
   },
@@ -47,7 +52,9 @@ function queryResult(data: unknown) {
 
 describe("refresh query hook contracts", () => {
   beforeEach(() => {
+    runtime.invalidateQueries.mockReset();
     runtime.refetch.mockReset();
+    runtime.sendMessage.mockReset();
     runtime.setQueryData.mockReset();
     runtime.useQuery.mockReset();
   });
@@ -82,5 +89,26 @@ describe("refresh query hook contracts", () => {
 
     expect(result.refreshMessages).toBe(runtime.refetch);
     expect(result.isRefreshing).toBe(true);
+  });
+
+  it("invalidates the Chat list after sending a message", async () => {
+    runtime.useQuery.mockReturnValue(
+      queryResult({
+        targetUser: { id: "user-2", name: "user_2" },
+        messages: [],
+      }),
+    );
+    runtime.sendMessage.mockResolvedValue({
+      id: "message-1",
+      senderId: "me",
+      text: "hello",
+    });
+
+    const result = useChatMessages("user-2");
+    await result.sendMessage("hello");
+
+    expect(runtime.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["chat", "list"],
+    });
   });
 });

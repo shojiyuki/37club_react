@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { dataSources } from "@/lib/data";
 import type { AppChatMessage } from "@/lib/data/types";
+import { CHAT_LIST_QUERY_KEY } from "./use-chat-list";
 
 export type ChatMessage = AppChatMessage;
 
@@ -34,6 +35,7 @@ export function useChatMessages(userId?: string) {
         targetUser: current?.targetUser ?? { id: userId, name: "ユーザー" },
         messages: [...(current?.messages ?? []), message],
       }));
+      void queryClient.invalidateQueries({ queryKey: CHAT_LIST_QUERY_KEY });
     },
     [queryClient, queryKey, userId],
   );

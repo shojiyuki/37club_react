@@ -9,6 +9,8 @@ Object.assign(globalThis, { React });
 const nativeActions = vi.hoisted(() => new Map<string, () => void>());
 const runtime = vi.hoisted(() => ({
   alert: vi.fn(),
+  appStateChange: null as null | ((state: string) => void),
+  appStateRemove: vi.fn(),
   blockUser: vi.fn<(input: { targetUserId: string }) => Promise<unknown>>(),
   chat: {
     messages: [
@@ -24,6 +26,7 @@ const runtime = vi.hoisted(() => ({
     onChangeText: (value: string) => void;
     onSend: () => void;
   },
+  focusEffect: null as null | (() => void | (() => void)),
   list: null as null | {
     onContentSizeChange?: () => void;
     onLongPress?: (message: {
@@ -47,6 +50,9 @@ vi.mock("expo-haptics", () => ({
 
 vi.mock("expo-router", () => ({
   router: { back: runtime.routerBack },
+  useFocusEffect: (effect: typeof runtime.focusEffect) => {
+    runtime.focusEffect = effect;
+  },
   useLocalSearchParams: () => runtime.params,
 }));
 
@@ -75,6 +81,15 @@ vi.mock("react-native", async () => {
   return {
     ActivityIndicator: () => null,
     Alert: { alert: runtime.alert },
+    AppState: {
+      addEventListener: (
+        _event: string,
+        listener: NonNullable<typeof runtime.appStateChange>,
+      ) => {
+        runtime.appStateChange = listener;
+        return { remove: runtime.appStateRemove };
+      },
+    },
     FlatList: () => null,
     KeyboardAvoidingView: Passthrough,
     Modal: ({
@@ -212,12 +227,15 @@ describe("mounted chat detail safety flow", () => {
   beforeEach(async () => {
     nativeActions.clear();
     runtime.alert.mockReset();
+    runtime.appStateChange = null;
+    runtime.appStateRemove.mockReset();
     runtime.blockUser.mockReset();
     runtime.chat.isRefreshing = false;
     runtime.chat.refreshMessages.mockReset();
     runtime.chat.sendMessage.mockReset();
     runtime.input = null;
     runtime.list = null;
+    runtime.focusEffect = null;
     runtime.report.mockReset();
     runtime.routerBack.mockReset();
     runtime.scrollToEnd.mockReset();
@@ -412,6 +430,37 @@ describe("mounted chat detail safety flow", () => {
       "更新できませんでした",
       "時間をおいてもう一度お試しください",
     );
+  });
+
+  it("refreshes and requests the latest message on focus and foreground return", async () => {
+    runtime.chat.refreshMessages.mockResolvedValue({ isError: false });
+
+    const lifecycle: { cleanup?: () => void } = {};
+    await act(async () => {
+      lifecycle.cleanup = runtime.focusEffect?.() || undefined;
+      await Promise.resolve();
+    });
+
+    expect(runtime.chat.refreshMessages).toHaveBeenCalledOnce();
+    await act(async () => {
+      runtime.list?.onContentSizeChange?.();
+    });
+    expect(runtime.scrollToEnd).toHaveBeenCalledWith({ animated: false });
+
+    await act(async () => {
+      runtime.appStateChange?.("background");
+      await Promise.resolve();
+    });
+    expect(runtime.chat.refreshMessages).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      runtime.appStateChange?.("active");
+      await Promise.resolve();
+    });
+    expect(runtime.chat.refreshMessages).toHaveBeenCalledTimes(2);
+
+    lifecycle.cleanup?.();
+    expect(runtime.appStateRemove).toHaveBeenCalledOnce();
   });
 });
 

@@ -3,10 +3,12 @@
 // user-less chat detail screen.
 
 import * as Haptics from "expo-haptics";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
+  AppState,
+  AppStateStatus,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -92,6 +94,28 @@ export default function ChatDetailScreen() {
     flatListRef.current?.scrollToEnd({ animated: false });
   }, []);
 
+  const refreshAndRequestLatestMessage = useCallback(async () => {
+    const result = await refreshMessages();
+    if (result.isError) return result;
+    shouldScrollAfterRefresh.current = true;
+    setRefreshScrollRequest((current) => current + 1);
+    return result;
+  }, [refreshMessages]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return;
+      void refreshAndRequestLatestMessage();
+      const subscription = AppState.addEventListener(
+        "change",
+        (state: AppStateStatus) => {
+          if (state === "active") void refreshAndRequestLatestMessage();
+        },
+      );
+      return () => subscription.remove();
+    }, [refreshAndRequestLatestMessage, userId]),
+  );
+
   React.useEffect(() => {
     if (refreshScrollRequest === 0) return;
     const animationFrame = requestAnimationFrame(scrollToLatestAfterRefresh);
@@ -143,10 +167,8 @@ export default function ChatDetailScreen() {
   async function handleRefresh() {
     if (isRefreshing) return;
     try {
-      const result = await refreshMessages();
+      const result = await refreshAndRequestLatestMessage();
       if (result.isError) throw result.error;
-      shouldScrollAfterRefresh.current = true;
-      setRefreshScrollRequest((current) => current + 1);
     } catch (error) {
       console.error("[chat] refresh failed", error);
       Alert.alert("更新できませんでした", "時間をおいてもう一度お試しください");

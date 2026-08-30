@@ -1,6 +1,8 @@
 import React from "react";
 import {
   Alert,
+  AppState,
+  AppStateStatus,
   FlatList,
   Pressable,
   RefreshControl,
@@ -9,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveTimerHeaderTicking } from "@/components/LiveTimerHeader";
 import { useChatList } from "@/hooks/use-chat-list";
@@ -127,6 +129,19 @@ export default function ChatListScreen() {
   const insets = useSafeAreaInsets();
   const { activeTopicStartAt } = useAppMode();
   const { chatUsers, refreshChatList, isRefreshing } = useChatList();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      void refreshChatList();
+      const subscription = AppState.addEventListener(
+        "change",
+        (state: AppStateStatus) => {
+          if (state === "active") void refreshChatList();
+        },
+      );
+      return () => subscription.remove();
+    }, [refreshChatList]),
+  );
 
   async function handleRefresh() {
     if (isRefreshing) return;

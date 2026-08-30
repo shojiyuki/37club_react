@@ -8,6 +8,8 @@ Object.assign(globalThis, { React });
 
 const runtime = vi.hoisted(() => ({
   alert: vi.fn(),
+  appStateChange: null as null | ((state: string) => void),
+  appStateRemove: vi.fn(),
   chatUsers: [] as Array<{
     id: string;
     name: string;
@@ -23,11 +25,17 @@ const runtime = vi.hoisted(() => ({
     }>;
   },
   isRefreshing: false,
+  focusEffect: null as null | (() => void | (() => void)),
   refreshChatList: vi.fn<() => Promise<{ isError: boolean; error?: Error }>>(),
 }));
 
 vi.mock("expo-image", () => ({ Image: () => null }));
-vi.mock("expo-router", () => ({ router: { push: vi.fn() } }));
+vi.mock("expo-router", () => ({
+  router: { push: vi.fn() },
+  useFocusEffect: (effect: typeof runtime.focusEffect) => {
+    runtime.focusEffect = effect;
+  },
+}));
 vi.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
@@ -50,6 +58,15 @@ vi.mock("react-native", async () => {
     ReactModule.createElement(ReactModule.Fragment, null, children);
   return {
     Alert: { alert: runtime.alert },
+    AppState: {
+      addEventListener: (
+        _event: string,
+        listener: NonNullable<typeof runtime.appStateChange>,
+      ) => {
+        runtime.appStateChange = listener;
+        return { remove: runtime.appStateRemove };
+      },
+    },
     FlatList: (props: NonNullable<typeof runtime.flatList>) => {
       runtime.flatList = props;
       return null;
@@ -100,8 +117,11 @@ describe("mounted chat list refresh", () => {
 
   beforeEach(async () => {
     runtime.alert.mockReset();
+    runtime.appStateChange = null;
+    runtime.appStateRemove.mockReset();
     runtime.chatUsers = [];
     runtime.flatList = null;
+    runtime.focusEffect = null;
     runtime.isRefreshing = false;
     runtime.refreshChatList.mockReset();
     root = createRoot(createContainer());
@@ -140,5 +160,46 @@ describe("mounted chat list refresh", () => {
       "時間をおいてもう一度お試しください",
     );
     expect(runtime.flatList?.refreshControl?.props.tintColor).toBe("#00D8FF");
+  });
+
+  it("refreshes on screen focus and when the focused app returns active", async () => {
+    runtime.refreshChatList.mockResolvedValue({ isError: false });
+
+    const lifecycle: { cleanup?: () => void } = {};
+    await act(async () => {
+      lifecycle.cleanup = runtime.focusEffect?.() || undefined;
+      await Promise.resolve();
+    });
+
+    expect(runtime.refreshChatList).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      runtime.appStateChange?.("background");
+      await Promise.resolve();
+    });
+    expect(runtime.refreshChatList).toHaveBeenCalledOnce();
+
+    await act(async () => {
+      runtime.appStateChange?.("active");
+      await Promise.resolve();
+    });
+    expect(runtime.refreshChatList).toHaveBeenCalledTimes(2);
+
+    lifecycle.cleanup?.();
+    expect(runtime.appStateRemove).toHaveBeenCalledOnce();
+  });
+
+  it("keeps automatic refresh failures silent", async () => {
+    runtime.refreshChatList.mockResolvedValue({
+      isError: true,
+      error: new Error("NETWORK_ERROR"),
+    });
+
+    await act(async () => {
+      runtime.focusEffect?.();
+      await Promise.resolve();
+    });
+
+    expect(runtime.alert).not.toHaveBeenCalled();
   });
 });
